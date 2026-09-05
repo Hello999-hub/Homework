@@ -126,6 +126,8 @@ textarea{resize:vertical; min-height:56px}
 .chip.prio-high{background:var(--danger-soft); border-color:transparent; color:var(--danger); font-weight:600}
 .chip.prio-low{color:var(--ink-3)}
 .chip.tag{background:transparent; border-style:dashed; color:var(--ink-3)}
+a.chip.canvas{text-decoration:none; color:var(--ink-2); font-weight:600}
+a.chip.canvas:hover{background:var(--accent-soft); border-color:transparent; color:var(--accent-ink)}
 .notes{font-size:13.5px; color:var(--ink-2); margin-top:5px; overflow-wrap:anywhere}
 .right{display:flex; flex-direction:column; align-items:flex-end; gap:6px; text-align:right}
 .due{font-family:"IBM Plex Mono",ui-monospace,monospace; font-size:12.5px; color:var(--ink-2); font-variant-numeric:tabular-nums; white-space:nowrap}
@@ -289,9 +291,9 @@ kbd{font-family:"IBM Plex Mono",ui-monospace,monospace; font-size:11.5px; border
     var t = new Date(), iso = function(off){ var d = new Date(t); d.setDate(d.getDate()+off);
       return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); };
     return [
-      { id:"sample-1", title:"Lab write-up: titration of acetic acid", course:"Chemistry", due:iso(-1), time:"", prio:"high", est:90, notes:"Include the % error calculation.", done:false, sample:true, createdAt:0 },
-      { id:"sample-2", title:"Read The Crucible, Act II + response paragraph", course:"English", due:iso(0), time:"23:59", prio:"normal", est:45, notes:"", done:false, sample:true, createdAt:0 },
-      { id:"sample-3", title:"Problem set 7 — related rates, #1–24 odd", course:"Calculus", due:iso(3), time:"", prio:"normal", est:60, notes:"Show work for full credit.", done:false, sample:true, createdAt:0 }
+      { id:"sample-1", title:"Lab write-up: titration of acetic acid", course:"Chemistry", due:iso(-1), time:"", prio:"high", est:90, notes:"Include the % error calculation.", done:false, sample:true, source:"manual", createdAt:0 },
+      { id:"sample-2", title:"Read The Crucible, Act II + response paragraph", course:"English", due:iso(0), time:"23:59", prio:"normal", est:45, notes:"", done:false, sample:true, source:"manual", createdAt:0 },
+      { id:"sample-3", title:"Problem set 7 — related rates, #1–24 odd", course:"Calculus", due:iso(3), time:"", prio:"normal", est:60, notes:"Show work for full credit.", done:false, sample:true, source:"manual", createdAt:0 }
     ];
   }
   function loadLocal(){
@@ -417,6 +419,15 @@ kbd{font-family:"IBM Plex Mono",ui-monospace,monospace; font-size:11.5px; border
     if(it.prio === "low") meta.appendChild(el("span", "chip prio-low", "Low priority"));
     if(it.est) meta.appendChild(el("span", "chip", "~" + it.est + " min"));
     if(it.sample) meta.appendChild(el("span", "chip tag", "Example"));
+    if(it.source === "canvas"){
+      if(it.link){
+        var a = document.createElement("a");
+        a.className = "chip canvas"; a.href = it.link; a.target = "_blank"; a.rel = "noopener noreferrer";
+        a.textContent = "Canvas \u2197";
+        a.setAttribute("aria-label", "Open " + it.title + " in Canvas");
+        meta.appendChild(a);
+      } else meta.appendChild(el("span", "chip canvas", "Canvas"));
+    }
     if(meta.childNodes.length) body.appendChild(meta);
     if(it.notes) body.appendChild(el("div", "notes", it.notes));
     row.appendChild(body);
@@ -467,6 +478,7 @@ kbd{font-family:"IBM Plex Mono",ui-monospace,monospace; font-size:11.5px; border
       if(target){
         target.title = t.value.trim(); target.course = c.value.trim(); target.due = d.value;
         target.time = tm.value; target.prio = p.value; target.est = e.value ? +e.value : null; target.notes = n.value.trim();
+        target.edited = true;
         if(!usingSamples) persist(target);
       }
       editingId = null; render();
@@ -618,7 +630,8 @@ kbd{font-family:"IBM Plex Mono",ui-monospace,monospace; font-size:11.5px; border
     add({
       id: uid(), title: title, course: $("fCourse").value.trim(), due: $("fDue").value,
       time: $("fTime").value, prio: $("fPrio").value, est: $("fEst").value ? +$("fEst").value : null,
-      notes: $("fNotes").value.trim(), done: false, doneAt: null, createdAt: Date.now()
+      notes: $("fNotes").value.trim(), done: false, doneAt: null, createdAt: Date.now(),
+      source: "manual", link: "", edited: false
     });
     $("fTitle").value = ""; $("fNotes").value = ""; $("fEst").value = "";
     $("fTitle").focus();

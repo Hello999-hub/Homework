@@ -1,0 +1,34 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Instructure//Canvas//EN
+BEGIN:VEVENT
+DTSTART:20260906T035900Z
+DTEND:20260906T035900Z
+UID:event-assignment-8842211@example.instructure.com
+SUMMARY:Problem set 7 — related rates\, #1–24 odd [MATH 1520 Calculus I]
+DESCRIPTION:<p>Show your work for full credit. Submit as a single P
+ DF to the portal.</p>
+URL:https://example.instructure.com/courses/1201/assignments/8842211
+CLASS:PUBLIC
+END:VEVENT
+BEGIN:VEVENT
+DTSTART;VALUE=DATE:20260909
+UID:event-assignment-8842219@example.instructure.com
+SUMMARY:Lab write-up: titration of acetic acid [CHEM 1310]
+DESCRIPTION:Include the % error calculation.
+URL:https://example.instructure.com/courses/1188/assignments/8842219
+END:VEVENT
+BEGIN:VEVENT
+DTSTART:20260905T160000Z
+UID:event-calendar-event-99001@example.instructure.com
+SUMMARY:Office hours — Dr. Okonkwo [CHEM 1310]
+DESCRIPTION:Weekly drop-in.
+END:VEVENT
+BEGIN:VEVENT
+DTSTART:20260912T045900Z
+UID:event-assignment-8842250@example.instructure.com
+SUMMARY:Read The Crucible\, Act II + response paragraph [ENGL 2010]
+DESCRIPTION:One paragraph\, 200 words minimum.
+URL:https://example.instructure.com/courses/1174/assignments/8842250
+END:VEVENT
+END:VCALENDAR
