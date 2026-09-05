@@ -15,6 +15,30 @@ making network requests to outside sites. So the sync runs somewhere else:
    page the new assignments are there.
 4. If the run turned up anything worth knowing, it sends a push notification and email.
 
+## Before anything else: network access
+
+The scheduled job runs in a Claude Code remote environment, and those environments have a
+**network policy** that decides which hosts they may reach. The default policy is an
+allowlist of developer infrastructure — github.com, package registries, and similar.
+Canvas is not on it.
+
+Checked from this environment on 2026-09-05:
+
+| Host | Result |
+| --- | --- |
+| `github.com`, `pypi.org` | reachable |
+| `example.com` | blocked |
+| `umd.instructure.com` | blocked |
+
+`example.com` failing shows this is a general egress policy, not a Canvas-specific block.
+Until the policy allows your Canvas host, `canvas_sync.py` cannot fetch the feed no
+matter how the credentials are configured — it will say so plainly rather than blaming
+your feed URL.
+
+Fix it by allowing your Canvas host in the environment's network settings
+(see the [Claude Code on the web docs](https://code.claude.com/docs/en/claude-code-on-the-web)),
+or use one of the alternative routes at the bottom of this file.
+
 ## Setup
 
 ### 1. Get your Canvas feed URL
@@ -68,3 +92,18 @@ python3 canvas_sync.py plan --ics-file tests/sample_canvas.ics --tz America/New_
 
 The `plan` command only reads. It prints the documents it *would* write; something else
 applies them, so you can always look before anything changes.
+
+## If the network policy can't be changed
+
+The sync needs *something* with internet access to fetch the feed. If this environment
+can't have it, the fetching has to happen elsewhere:
+
+- **Let Google Calendar do the fetching.** Subscribe to the Canvas feed in Google
+  Calendar ("Other calendars → From URL"). Google polls Canvas; a scheduled Claude
+  session then reads Google Calendar through its connector and writes into the tracker.
+  Nothing needs to reach Canvas directly. The cost is latency — Google refreshes
+  subscribed ICS feeds on its own schedule, often many hours behind, which blunts
+  "tell me as soon as new homework is posted".
+- **Paste it in.** Copy an assignment list out of Canvas and import it into the tracker
+  by hand. No credentials, no network, no waiting — but nothing watches for you, so
+  there are no reminders.

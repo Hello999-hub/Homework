@@ -56,6 +56,17 @@ def fetch_ics(url):
         with urllib.request.urlopen(url, timeout=45) as resp:
             return resp.read().decode("utf-8", "replace")
     except Exception as exc:                            # noqa: BLE001
+        blocked = any(sign in (detail + str(exc)).lower() for sign in
+                      ("connect tunnel failed", "403", "proxy", "connect_rejected"))
+        if blocked:
+            raise SystemExit(
+                "Blocked before reaching Canvas: this environment's network policy "
+                "refused the connection (%s).\n"
+                "This is not a problem with the feed URL. The environment only allows "
+                "an allowlist of developer hosts, and your Canvas host is not on it. "
+                "Allow it in the environment's network settings, or sync by another "
+                "route -- see SYNC.md." % detail
+            )
         raise SystemExit(
             "Could not read the Canvas feed (%s; then %s).\n"
             "Check that CANVAS_ICS_URL is the full feed URL from "
