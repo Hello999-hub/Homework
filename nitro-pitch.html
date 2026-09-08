@@ -67,8 +67,8 @@ canvas#gl{position:fixed; inset:0; width:100%; height:100%; display:block; backg
 /* boost gauge + speed, one per view */
 .pod{position:absolute; right:22px; bottom:20px; display:flex; align-items:flex-end; gap:14px}
 .gauge{
-  --p:33; width:88px; height:88px; border-radius:50%; display:grid; place-items:center;
-  background:conic-gradient(from -135deg, var(--nitro) calc(var(--p) * 2.7deg), rgba(255,255,255,.09) 0);
+  --sweep:89deg; width:88px; height:88px; border-radius:50%; display:grid; place-items:center;
+  background:conic-gradient(from -135deg, var(--nitro) var(--sweep), rgba(255,255,255,.09) var(--sweep), rgba(255,255,255,.09) 270deg, transparent 270deg);
   mask:radial-gradient(circle, transparent 55%, #000 56%);
   -webkit-mask:radial-gradient(circle, transparent 55%, #000 56%);
 }
@@ -196,6 +196,36 @@ kbd{
 .stat .l{font-family:"Chakra Petch",system-ui,sans-serif; font-size:10.5px; letter-spacing:.18em; text-transform:uppercase; color:var(--ink-3)}
 .note{font-size:12.5px; color:var(--ink-3); margin:0}
 
+/* ---------------- touch controls ---------------- */
+#touch{display:none}
+body.touchmode .tagline{display:none}
+body.touchmode #touch.on{display:block}
+.tbtn{
+  position:absolute; pointer-events:auto; -webkit-user-select:none; user-select:none;
+  display:grid; place-items:center; border-radius:50%;
+  font-family:"Chakra Petch",system-ui,sans-serif; font-size:12px; font-weight:600;
+  letter-spacing:.12em; text-transform:uppercase; color:var(--ink);
+  background:rgba(16,25,40,.55); border:1.5px solid rgba(255,255,255,.22);
+  backdrop-filter:blur(3px); touch-action:none; transition:background .08s, transform .08s;
+}
+.tbtn.down{background:rgba(255,209,102,.35); border-color:var(--nitro); transform:scale(.94)}
+.tbtn.steerL{left:20px; bottom:34px; width:82px; height:82px; font-size:22px}
+.tbtn.steerR{left:112px; bottom:34px; width:82px; height:82px; font-size:22px}
+.tbtn.gas{right:20px; bottom:34px; width:96px; height:96px; font-size:14px}
+.tbtn.boost{right:126px; bottom:52px; width:78px; height:78px; color:var(--nitro)}
+.tbtn.jump{right:36px; bottom:142px; width:76px; height:76px}
+.tbtn.rev{right:150px; bottom:150px; width:60px; height:60px; font-size:11px}
+.tbtn.cam{left:20px; bottom:128px; width:56px; height:56px; font-size:10px}
+.tbtn.pausebtn{left:20px; top:16px; width:48px; height:48px; font-size:16px; border-radius:10px}
+@media (max-height:520px){
+  .tbtn.steerL,.tbtn.steerR{width:66px; height:66px; bottom:20px}
+  .tbtn.steerR{left:94px}
+  .tbtn.gas{width:78px; height:78px; bottom:20px}
+  .tbtn.boost{width:64px; height:64px; right:106px; bottom:34px}
+  .tbtn.jump{width:62px; height:62px; bottom:106px}
+  .tbtn.rev{width:52px; height:52px; bottom:110px; right:124px}
+  .tbtn.cam{bottom:96px; width:48px; height:48px}
+}
 @media (max-width:640px){
   .row{grid-template-columns:1fr; gap:8px}
   .pod{right:14px; bottom:14px}
@@ -232,6 +262,17 @@ kbd{
   <div class="tagline" id="tagline">
     <kbd>C</kbd> ball cam · <kbd>Esc</kbd> pause
   </div>
+</div>
+
+<div class="layer" id="touch">
+  <button class="tbtn steerL" data-k="left" aria-label="Steer left">◀</button>
+  <button class="tbtn steerR" data-k="right" aria-label="Steer right">▶</button>
+  <button class="tbtn gas" data-k="up" aria-label="Drive">Go</button>
+  <button class="tbtn rev" data-k="down" aria-label="Reverse">Rev</button>
+  <button class="tbtn boost" data-k="boost" aria-label="Boost">Boost</button>
+  <button class="tbtn jump" data-k="jump" aria-label="Jump and flip">Jump</button>
+  <button class="tbtn cam" data-k="cam" aria-label="Ball cam">Cam</button>
+  <button class="tbtn pausebtn" data-k="pause" aria-label="Pause">II</button>
 </div>
 
 <div class="layer" id="callout"></div>
@@ -870,7 +911,7 @@ const edge = new Set();          // keys that went down since the last physics t
 addEventListener('keydown', e => {
   if (e.repeat) return;
   const c = e.code;
-  if (['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Slash','Period','Comma','Tab'].includes(c)) e.preventDefault();
+  if (['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Slash','Period','Comma'].includes(c)) e.preventDefault();
   keys.add(c); edge.add(c);
   Snd.init(); Snd.resume();
   if (c === 'Escape') UI.togglePause();
@@ -890,6 +931,42 @@ const SOLO_EXTRA = { up:['ArrowUp'], down:['ArrowDown'], left:['ArrowLeft'], rig
 
 const held = (list) => list.some(k => keys.has(k));
 const tapped = (list) => list.some(k => edge.has(k));
+
+/* on-screen controls: a phone has no keyboard, so player one gets thumbs */
+const touch = { up: false, down: false, left: false, right: false, boost: false,
+                jumpEdge: false, camEdge: false, active: false };
+function enableTouch(){
+  if (touch.active) return;
+  touch.active = true;
+  document.body.classList.add('touchmode');
+  if (typeof UI !== 'undefined' && UI.layout) UI.layout();
+}
+function bindTouch(){
+  for (const btn of document.querySelectorAll('#touch .tbtn')){
+    const k = btn.dataset.k;
+    const down = e => {
+      e.preventDefault(); enableTouch();
+      Snd.init(); Snd.resume();
+      btn.classList.add('down');
+      if (k === 'jump') touch.jumpEdge = true;
+      else if (k === 'cam') touch.camEdge = true;
+      else if (k === 'pause') UI.togglePause();
+      else touch[k] = true;
+      if (e.pointerId != null && btn.setPointerCapture){ try { btn.setPointerCapture(e.pointerId); } catch (_){} }
+    };
+    const up = () => {
+      btn.classList.remove('down');
+      if (k !== 'jump' && k !== 'cam' && k !== 'pause') touch[k] = false;
+    };
+    btn.addEventListener('pointerdown', down);
+    btn.addEventListener('pointerup', up);
+    btn.addEventListener('pointercancel', up);
+    btn.addEventListener('pointerleave', up);
+    btn.addEventListener('contextmenu', e => e.preventDefault());
+  }
+}
+if (matchMedia('(pointer: coarse)').matches) enableTouch();   // a touch-first device; hybrids arm on first touch
+addEventListener('touchstart', enableTouch, { once: true, passive: true });
 
 function padFor(i){
   const pads = navigator.getGamepads ? navigator.getGamepads() : [];
@@ -919,6 +996,15 @@ function readInput(i, solo){
   inp.slide = held(s.slide) || (solo && held(SOLO_EXTRA.slide));
   inp.jump = tapped(s.jump) || (solo && tapped(SOLO_EXTRA.jump));
   inp.cam = tapped(s.cam);
+
+  if (i === 0 && touch.active){
+    if (touch.up) inp.throttle = 1; else if (touch.down) inp.throttle = -1;
+    if (touch.left) inp.steer = -1; else if (touch.right) inp.steer = 1;
+    if (touch.up || touch.down) inp.pitch = inp.throttle;
+    if (touch.boost) inp.boost = true;
+    if (touch.jumpEdge){ inp.jump = true; touch.jumpEdge = false; }
+    if (touch.camEdge){ inp.cam = true; touch.camEdge = false; }
+  }
 
   const p = padFor(i);
   if (p){
@@ -968,7 +1054,7 @@ function makeCar(team, control, playerIdx){
     boost: 33, speed: 0, onGround: true, jumps: 0, sinceJump: 9,
     dodgeT: 0, dodgePitch: 0, dodgeRoll: 0,
     ballCam: true, supersonic: 0, flameT: 0, bumpT: 0,
-    aiNoiseX: 0, aiNoiseZ: 0, aiTimer: 0, aiJumpCd: 0,
+    aiNoiseX: 0, aiNoiseZ: 0, aiTimer: 0, aiJumpCd: 0, stuckT: 0, stuckSteer: 0,
     mat: m4.make()
   };
 }
@@ -1039,7 +1125,7 @@ function stepBall(dt){
   for (const s of [-1, 1]){
     const past = s * ball.z + R > F.hz;
     if (!past) continue;
-    if (inGoalMouth(ball.x, ball.y, R * 0.35)){
+    if (inGoalMouth(ball.x, ball.y, R)){          // the ball has to fit between the posts
       // inside the net box
       if (s * ball.z + R > F.hz + F.goalD){
         ball.z = s * (F.hz + F.goalD - R);
@@ -1102,9 +1188,10 @@ function stepCar(c, inp, dt){
     if (fs < -30) fs = -30;
 
     const spAbs = Math.abs(fs);
-    const grip = clamp(spAbs / 7, 0, 1);
-    const turn = 3.0 * (1 - 0.52 * clamp(spAbs / MAXV, 0, 1)) * grip * (inp.slide ? 1.35 : 1);
-    c.yaw += inp.steer * turn * dt * (fs < -0.5 ? -1 : 1);
+    // a little steering authority even at a standstill, so a nose in the wall isn't a trap
+    const grip = clamp(spAbs / 7, inp.throttle !== 0 || boosting ? 0.45 : 0, 1);
+    const turn = 4.6 * (1 - 0.34 * clamp(spAbs / MAXV, 0, 1)) * grip * (inp.slide ? 1.4 : 1);
+    c.yaw = wrapAngle(c.yaw + inp.steer * turn * dt * (fs < -0.5 ? -1 : 1));
 
     lat *= Math.exp(-(inp.slide ? 1.4 : 9.5) * dt);
     if (inp.slide && Math.abs(lat) > 12 && Math.random() < 0.4)
@@ -1176,19 +1263,19 @@ function stepCar(c, inp, dt){
   // walls
   const lim = F.hx - CAR.hz * 0.75;
   for (const s of [-1, 1]){
-    if (s * c.x > lim){ c.x = s * lim; if (s * c.vx > 0) c.vx *= -0.2; }
+    if (s * c.x > lim){ c.x = s * lim; if (s * c.vx > 0) c.vx = 0; }   // slide along it, don't bounce
   }
   for (const s of [-1, 1]){
     if (s * c.z > F.hz - CAR.hz * 0.75){
-      if (inGoalMouth(c.x, c.y, CAR.hx)){
+      if (inGoalMouth(c.x, c.y, CAR.hz * 0.8)){
         const deep = F.hz + F.goalD - CAR.hz;
-        if (s * c.z > deep){ c.z = s * deep; if (s * c.vz > 0) c.vz *= -0.2; }
+        if (s * c.z > deep){ c.z = s * deep; if (s * c.vz > 0) c.vz = 0; }
         if (Math.abs(c.x) > F.goalHW - CAR.hx){
           c.x = Math.sign(c.x) * (F.goalHW - CAR.hx); c.vx *= -0.2;
         }
       } else {
         c.z = s * (F.hz - CAR.hz * 0.75);
-        if (s * c.vz > 0) c.vz *= -0.2;
+        if (s * c.vz > 0) c.vz = 0;
       }
     }
   }
@@ -1309,7 +1396,7 @@ function collectPads(c, dt){
    ========================================================================= */
 const AI_PARAM = [
   { lead: 0.40, err: 10.0, think: 0.60, jump: 0.020, flip: 0.05, top: 50, hunt: 18, name: 'Rookie' },
-  { lead: 0.80, err: 4.5,  think: 0.36, jump: 0.055, flip: 0.13, top: 72, hunt: 32, name: 'Pro' },
+  { lead: 0.90, err: 3.2,  think: 0.32, jump: 0.055, flip: 0.13, top: 76, hunt: 32, name: 'Pro' },
   { lead: 1.15, err: 1.6,  think: 0.22, jump: 0.110, flip: 0.22, top: 92, hunt: 44, name: 'All-star' }
 ];
 
@@ -1372,12 +1459,19 @@ function aiInput(c, dt){
   const want = Math.atan2(dxT, dzT);
   const diff = wrapAngle(want - c.yaw);
 
+  c.stuckT = (c.speed < 7 && d2 > 10) ? c.stuckT + dt : 0;
+  if (c.stuckT > 1.0){                        // nose in a wall: back out and try again
+    inp.throttle = -1;
+    inp.steer = c.stuckSteer || (c.stuckSteer = Math.random() < 0.5 ? -1 : 1);
+    if (c.stuckT > 2.2){ c.stuckT = 0; c.stuckSteer = 0; }
+    return inp;
+  }
   if (Math.abs(diff) > 2.1 && d2 < 20){
     inp.throttle = -1;
     inp.steer = clamp(-diff * 1.6, -1, 1);
   } else {
-    inp.throttle = 1;
-    inp.steer = clamp(diff * 2.0, -1, 1);
+    inp.throttle = (Math.abs(diff) > 1.0 && d2 < 34) ? 0.45 : 1;
+    inp.steer = clamp(diff * 2.4, -1, 1);
     inp.slide = Math.abs(diff) > 1.15 && c.speed > 28;
   }
   if (defending && d2 < 6) inp.throttle = 0;
@@ -1402,28 +1496,57 @@ function aiInput(c, dt){
 function makeCam(){ return { x: 0, y: 14, z: -46, tx: 0, ty: 2, tz: 0, ready: false }; }
 const cams = [makeCam(), makeCam()];
 
+/* Chase camera. It must never end up outside the bowl, and it must not collapse
+   into the car when the car is flat against a wall — so a blocked offset slides
+   along the wall instead of being pulled in. */
 function updateCamera(cam, c, dt){
-  let dx, dz;
-  if (c.ballCam){
-    dx = c.x - ball.x; dz = c.z - ball.z;
-    const l = Math.hypot(dx, dz);
-    if (l < 7){ dx = -Math.sin(c.yaw); dz = -Math.cos(c.yaw); }
-    else { dx /= l; dz /= l; }
-  } else {
-    dx = -Math.sin(c.yaw); dz = -Math.cos(c.yaw);
+  const ballCam = c.ballCam || G.state === 'goal';
+  let dx = -Math.sin(c.yaw), dz = -Math.cos(c.yaw);
+  if (ballCam){
+    let bx = c.x - ball.x, bz = c.z - ball.z;
+    const l = Math.hypot(bx, bz);
+    if (l > 0.5){
+      bx /= l; bz /= l;
+      const w = clamp((l - 5) / 9, 0, 1);       // hand over gradually, no snap up close
+      dx = lerp(dx, bx, w); dz = lerp(dz, bz, w);
+      const n = Math.hypot(dx, dz) || 1; dx /= n; dz /= n;
+    }
   }
   const back = 16 + clamp(c.speed * 0.09, 0, 5);
-  const gx = c.x + dx * back;
-  const gz = c.z + dz * back;
-  const gy = c.y + 7.5 + clamp((c.y - CAR.rest) * 0.35, 0, 9);
+  const M = 2.4;
+  const inMouth = Math.abs(c.x) < F.goalHW - M && c.y < F.goalH;
+  const xLim = inMouth && Math.abs(c.z) > F.hz - 4 ? F.goalHW - M : F.hx - M;
+  const zLim = (inMouth ? F.hz + F.goalD : F.hz) - M;
+
+  let ox = clamp(c.x + dx * back, -xLim, xLim) - c.x;
+  let oz = clamp(c.z + dz * back, -zLim, zLim) - c.z;
+  const clippedX = Math.abs(ox) < Math.abs(dx * back) - 0.05;
+  const clippedZ = Math.abs(oz) < Math.abs(dz * back) - 0.05;
+  // one axis blocked: spend the lost distance on the other, heading back to mid-pitch
+  if (clippedX && !clippedZ){
+    const extra = Math.sqrt(Math.max(0, back * back - ox * ox)) * (c.z > 0 ? -1 : 1);
+    oz = clamp(c.z + extra, -zLim, zLim) - c.z;
+  } else if (clippedZ && !clippedX){
+    const extra = Math.sqrt(Math.max(0, back * back - oz * oz)) * (c.x > 0 ? -1 : 1);
+    ox = clamp(c.x + extra, -xLim, xLim) - c.x;
+  }
+  // still short (a corner, or inside the net): climb instead
+  const short = clamp(1 - Math.hypot(ox, oz) / back, 0, 1);
+
+  const gx = c.x + ox, gz = c.z + oz;
+  const gy = c.y + 7.5 + clamp((c.y - CAR.rest) * 0.35, 0, 9) + short * 13;
   const k = cam.ready ? 1 - Math.exp(-9 * dt) : 1;
   cam.x = lerp(cam.x, gx, k);
-  cam.y = lerp(cam.y, Math.max(gy, 2.6), k);
+  cam.y = lerp(cam.y, clamp(gy, 2.6, F.wall * 1.9), k);
   cam.z = lerp(cam.z, gz, k);
 
+  // when the shot was forced sideways, frame the car rather than the ball,
+  // otherwise the car slides out of view along the edge of the screen
+  const aim = clamp((ox * dx + oz * dz) / (Math.hypot(ox, oz) || 1), 0.12, 1);
   let lx, ly, lz;
-  if (c.ballCam){
-    lx = lerp(c.x, ball.x, 0.55); ly = lerp(c.y + 1.6, ball.y, 0.45); lz = lerp(c.z, ball.z, 0.55);
+  if (ballCam){
+    const w = 0.55 * aim;
+    lx = lerp(c.x, ball.x, w); ly = lerp(c.y + 1.6, ball.y, w * 0.8); lz = lerp(c.z, ball.z, w);
   } else {
     lx = c.x - dx * 12; ly = c.y + 2.4; lz = c.z - dz * 12;
   }
@@ -1544,6 +1667,7 @@ function placeKickoff(){
     m4.rig(c.mat, c.x, c.y, c.z, c.yaw, 0, 0, 1, 1, 1);
   }
   for (const p of G.pads) p.t = 0;
+  G.lastTouchTeam = null;
 }
 
 function buildCars(){
@@ -1645,7 +1769,7 @@ const UI = {
     $('pod2').classList.toggle('hidden', !split);
     $('tag1').classList.toggle('hidden', !split);
     $('tag2').classList.toggle('hidden', !split);
-    $('pod1').style.bottom = split ? 'calc(50% + 14px)' : '20px';
+    $('pod1').style.bottom = split ? 'calc(50% + 14px)' : (touch.active ? '128px' : '20px');
     $('pod2').style.bottom = '14px';
     $('tag1').style.top = '58px';
     $('tag2').style.top = 'calc(50% + 14px)';
@@ -1668,7 +1792,7 @@ const UI = {
       if (!car) continue;
       const g = $('gauge' + (i + 1));
       if (!g) continue;
-      g.style.setProperty('--p', Math.round(car.boost));
+      g.style.setProperty('--sweep', (car.boost * 2.7).toFixed(1) + 'deg');
       $('boost' + (i + 1)).textContent = Math.round(car.boost);
       const kph = Math.round((car.speed || 0) * 2.4);
       $('speed' + (i + 1)).innerHTML = kph + ' <b class="' + (car.supersonic ? 'super' : '') + '">kph</b>';
@@ -1717,9 +1841,17 @@ function keysMarkup(){
     ['Ball cam', '<kbd>M</kbd>']
   ];
   const fmt = list => list.map(r => '<div class="k"><span>' + r[0] + '</span><span>' + r[1] + '</span></div>').join('');
+  if (touch.active)
+    return '<h2>On screen</h2>' +
+      '<div class="k"><span>Drive · steer</span><span>Go, Rev and the arrows</span></div>' +
+      '<div class="k"><span>Boost · jump</span><span>Right-hand buttons</span></div>' +
+      '<div class="k"><span>Flip</span><span>Jump twice, holding a direction</span></div>' +
+      '<div class="k"><span>Ball cam · pause</span><span>Cam, and II top left</span></div>' +
+      '<h2>Keyboard, if you have one</h2>' + fmt(rows);
   return '<h2>Player one · keyboard</h2>' + fmt(rows) +
          '<h2>Player two · split screen</h2>' + fmt(p2);
 }
+bindTouch();
 $('keysList').innerHTML = keysMarkup();
 $('keysList2').innerHTML = keysMarkup();
 
@@ -1762,7 +1894,7 @@ let acc = 0, last = performance.now();
 function gatherInputs(dt){
   const solo = G.mode === 'solo';
   const list = [];
-  const live = G.state === 'play' || G.state === 'goal';
+  const live = G.state === 'play';
   for (const c of G.cars){
     let inp;
     if (c.control === 'human') inp = readInput(c.playerIdx, solo);
@@ -1780,7 +1912,7 @@ function gatherInputs(dt){
 function simulate(inputs, dt){
   acc += dt;
   let guard = 0;
-  while (acc >= STEP && guard++ < 8){
+  while (acc >= STEP && guard++ < 14){
     acc -= STEP;
     for (let i = 0; i < G.cars.length; i++){
       stepCar(G.cars[i], inputs[i], STEP);
@@ -1793,7 +1925,7 @@ function simulate(inputs, dt){
     for (const c of G.cars) collectPads(c, STEP);
     for (const p of G.pads) if (p.t > 0) p.t = Math.max(0, p.t - STEP);
   }
-  if (guard >= 8) acc = 0;
+  if (guard >= 14) acc = 0;
 }
 
 function frame(now){
@@ -1877,6 +2009,9 @@ function frame(now){
   }
 
   if (G.state !== 'menu') UI.hud();
+
+  const showPad = touch.active && G.state !== 'menu' && G.state !== 'over';
+  if (showPad !== G.padShown){ G.padShown = showPad; $('touch').classList.toggle('on', showPad); }
 }
 
 buildCars();

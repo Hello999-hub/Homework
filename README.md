@@ -53,10 +53,12 @@ the driving, ball and bot are all hand-rolled.
   ball cam, `Esc` pauses.
 - Player two: arrow keys, `/` boost, `.` jump, `,` powerslide, `M` ball cam.
 - Gamepads work: triggers throttle, left stick steers, A jumps, X boosts, LB powerslides.
+- On a phone or tablet, on-screen controls appear automatically: steering arrows on the
+  left, Go/Rev/Boost/Jump on the right, plus ball cam and pause.
 
 ## What's simulated
 
 Boost pads that recharge on a timer (the six big ones fill the tank, the small ones top it
 up), jumps, directional flips that carry real momentum into the ball, car-on-car bumps,
-ball spin off the floor, and a ball that keeps playing after the clock hits zero until it
-next touches the ground.
+ball spin off the floor, goalposts and a crossbar the ball actually hits, and a ball that
+keeps playing after the clock hits zero until it next touches the ground.
