@@ -35,3 +35,28 @@ becomes available.
 An empty desk shows three example assignments (marked `Example`, on dashed rows) so the
 layout isn't a blank page. Adding your own assignment — or pressing "Clear examples" —
 removes them for good; they're never written to storage.
+
+---
+
+# Nitro Pitch
+
+Car soccer, in `nitro-pitch.html`. Also a single file with no build step and no
+dependencies — open it in a browser and it runs: the arena is drawn with raw WebGL and
+the driving, ball and bot are all hand-rolled.
+
+## Playing
+
+- **Solo vs bot** (Rookie / Pro / All-star) or **two players on one keyboard**, split screen.
+- 2, 5, or 10 minute matches. A draw at the whistle goes to golden-goal overtime.
+- Player one: `W`/`S` drive, `A`/`D` steer, `Shift` boost, `Space` jump — tap it again with
+  a direction held to flip. `V` powerslides on the ground and air-rolls off it, `C` toggles
+  ball cam, `Esc` pauses.
+- Player two: arrow keys, `/` boost, `.` jump, `,` powerslide, `M` ball cam.
+- Gamepads work: triggers throttle, left stick steers, A jumps, X boosts, LB powerslides.
+
+## What's simulated
+
+Boost pads that recharge on a timer (the six big ones fill the tank, the small ones top it
+up), jumps, directional flips that carry real momentum into the ball, car-on-car bumps,
+ball spin off the floor, and a ball that keeps playing after the clock hits zero until it
+next touches the ground.

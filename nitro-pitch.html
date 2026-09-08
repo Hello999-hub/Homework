@@ -1,0 +1,1889 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Nitro Pitch</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@600;700&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+:root{
+  --void:#060a14; --deck:#0d1524; --deck-2:#131f33; --edge:#243449;
+  --ink:#e8eefb; --ink-2:#9fb0ca; --ink-3:#697d99;
+  --ember:#ff7a2f; --ember-lit:#ffb06a;
+  --ion:#2fc6ff; --ion-lit:#8fe4ff;
+  --nitro:#ffd166;
+  --chamfer:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px);
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0; background:var(--void); color:var(--ink); overflow:hidden;
+  font-family:"Barlow","Segoe UI",system-ui,sans-serif;
+  -webkit-font-smoothing:antialiased; touch-action:none;
+}
+canvas#gl{position:fixed; inset:0; width:100%; height:100%; display:block; background:var(--void)}
+
+.layer{position:fixed; inset:0; pointer-events:none}
+.hidden{display:none !important}
+
+/* ---------------- heads-up display ---------------- */
+#hud{opacity:0; transition:opacity .3s}
+#hud.on{opacity:1}
+
+.scoreboard{
+  position:absolute; top:14px; left:50%; transform:translateX(-50%);
+  display:flex; align-items:stretch; gap:2px;
+  background:rgba(9,14,24,.82); border:1px solid var(--edge);
+  clip-path:var(--chamfer); backdrop-filter:blur(6px);
+}
+.side{display:flex; align-items:center; gap:10px; padding:8px 16px}
+.side .name{
+  font-family:"Chakra Petch",system-ui,sans-serif; font-weight:600; font-size:12px;
+  letter-spacing:.16em; text-transform:uppercase; color:var(--ink-2);
+}
+.side .pts{
+  font-family:"IBM Plex Mono",ui-monospace,monospace; font-weight:600; font-size:30px;
+  line-height:1; font-variant-numeric:tabular-nums;
+}
+.side.ember .pts{color:var(--ember-lit)} .side.ion .pts{color:var(--ion-lit)}
+.side.ember{border-bottom:3px solid var(--ember)} .side.ion{border-bottom:3px solid var(--ion)}
+.side.ion{flex-direction:row-reverse}
+.clock{
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1px;
+  padding:6px 18px; background:rgba(255,255,255,.045); min-width:104px;
+}
+.clock .t{
+  font-family:"IBM Plex Mono",ui-monospace,monospace; font-weight:600; font-size:23px; line-height:1.05;
+  font-variant-numeric:tabular-nums; letter-spacing:.02em;
+}
+.clock .t.low{color:var(--ember-lit)}
+.clock .tag{
+  font-family:"Chakra Petch",system-ui,sans-serif; font-size:9.5px; letter-spacing:.2em;
+  text-transform:uppercase; color:var(--ink-3);
+}
+.clock .tag.ot{color:var(--nitro)}
+
+/* boost gauge + speed, one per view */
+.pod{position:absolute; right:22px; bottom:20px; display:flex; align-items:flex-end; gap:14px}
+.gauge{
+  --p:33; width:88px; height:88px; border-radius:50%; display:grid; place-items:center;
+  background:conic-gradient(from -135deg, var(--nitro) calc(var(--p) * 2.7deg), rgba(255,255,255,.09) 0);
+  mask:radial-gradient(circle, transparent 55%, #000 56%);
+  -webkit-mask:radial-gradient(circle, transparent 55%, #000 56%);
+}
+.gauge-wrap{position:relative; width:88px; height:88px; display:grid; place-items:center}
+.gauge-wrap .num{
+  position:absolute; font-family:"IBM Plex Mono",ui-monospace,monospace; font-weight:600;
+  font-size:24px; font-variant-numeric:tabular-nums; color:var(--ink);
+  text-shadow:0 2px 10px rgba(0,0,0,.8);
+}
+.speed{
+  font-family:"IBM Plex Mono",ui-monospace,monospace; font-size:13px; color:var(--ink-2);
+  padding-bottom:8px; font-variant-numeric:tabular-nums; text-shadow:0 2px 8px rgba(0,0,0,.9);
+}
+.speed b{color:var(--ink); font-weight:600}
+.speed .super{color:var(--nitro)}
+.pod.p2{bottom:auto}
+.tagline{
+  position:absolute; left:22px; bottom:22px; max-width:230px; font-size:12.5px; color:var(--ink-3);
+  text-shadow:0 2px 8px rgba(0,0,0,.9); line-height:1.45;
+}
+.tagline kbd{
+  font-family:"IBM Plex Mono",ui-monospace,monospace; font-size:11px; color:var(--ink-2);
+  border:1px solid var(--edge); border-radius:3px; padding:0 4px; background:rgba(255,255,255,.05);
+}
+.viewtag{
+  position:absolute; left:22px; font-family:"Chakra Petch",system-ui,sans-serif; font-size:11px;
+  letter-spacing:.18em; text-transform:uppercase; color:var(--ink-3);
+}
+
+/* ---------------- big centred callouts ---------------- */
+#callout{display:grid; place-items:center; text-align:center}
+#callout .count{
+  font-family:"Chakra Petch",system-ui,sans-serif; font-weight:700; font-size:clamp(64px,14vw,150px);
+  line-height:1; letter-spacing:.02em; color:var(--ink); text-shadow:0 6px 40px rgba(0,0,0,.9);
+}
+#callout .goal{
+  font-family:"Chakra Petch",system-ui,sans-serif; font-weight:700;
+  font-size:clamp(52px,12vw,132px); line-height:.95; letter-spacing:.06em; text-transform:uppercase;
+}
+#callout .by{
+  font-family:"Chakra Petch",system-ui,sans-serif; font-size:clamp(13px,2.2vw,19px);
+  letter-spacing:.28em; text-transform:uppercase; color:var(--ink-2); margin-top:12px;
+}
+.pop{animation:pop .5s cubic-bezier(.16,1,.3,1) both}
+@keyframes pop{from{transform:scale(.7); opacity:0} to{transform:scale(1); opacity:1}}
+
+/* ---------------- menus ---------------- */
+.sheet{
+  position:fixed; inset:0; display:grid; place-items:center; padding:24px;
+  background:radial-gradient(120% 90% at 50% 0%, rgba(8,13,24,.55), rgba(4,7,13,.88));
+  backdrop-filter:blur(5px); pointer-events:auto; overflow:auto;
+}
+.panel{width:min(760px,100%); display:flex; flex-direction:column; gap:22px}
+.brand{display:flex; flex-direction:column; gap:6px}
+.kicker{
+  font-family:"Chakra Petch",system-ui,sans-serif; font-size:11.5px; letter-spacing:.42em;
+  text-transform:uppercase; color:var(--ember);
+}
+h1{
+  font-family:"Chakra Petch",system-ui,sans-serif; font-weight:700; margin:0;
+  font-size:clamp(44px,8.5vw,86px); line-height:.92; letter-spacing:-.01em; text-wrap:balance;
+}
+h1 em{font-style:normal; color:var(--ion)}
+.lede{margin:0; max-width:56ch; color:var(--ink-2); font-size:16px; line-height:1.5}
+
+.options{display:grid; gap:12px}
+.row{
+  display:grid; grid-template-columns:150px 1fr; align-items:center; gap:16px;
+  border-top:1px solid var(--edge); padding-top:12px;
+}
+.row > .lbl{
+  font-family:"Chakra Petch",system-ui,sans-serif; font-size:11.5px; letter-spacing:.2em;
+  text-transform:uppercase; color:var(--ink-3);
+}
+.seg{display:flex; flex-wrap:wrap; gap:6px}
+.seg button{
+  font:inherit; font-size:14px; color:var(--ink-2); cursor:pointer;
+  background:rgba(255,255,255,.04); border:1px solid var(--edge); padding:7px 15px;
+  clip-path:var(--chamfer); transition:color .12s, background .12s, border-color .12s;
+}
+.seg button:hover{color:var(--ink); background:rgba(255,255,255,.09)}
+.seg button[aria-pressed="true"]{
+  color:var(--void); background:var(--ion); border-color:var(--ion); font-weight:600;
+}
+.seg button:focus-visible, .go:focus-visible, .ghost:focus-visible{outline:2px solid var(--nitro); outline-offset:2px}
+
+.actions{display:flex; flex-wrap:wrap; gap:12px; align-items:center}
+.go{
+  font-family:"Chakra Petch",system-ui,sans-serif; font-weight:700; font-size:19px; letter-spacing:.12em;
+  text-transform:uppercase; color:var(--void); background:var(--ember); border:0; cursor:pointer;
+  padding:15px 38px; clip-path:var(--chamfer); transition:filter .12s, transform .12s;
+}
+.go:hover{filter:brightness(1.12); transform:translateY(-1px)}
+.ghost{
+  font:inherit; font-size:14px; letter-spacing:.02em; color:var(--ink-2); cursor:pointer;
+  background:transparent; border:1px solid var(--edge); padding:13px 22px; clip-path:var(--chamfer);
+}
+.ghost:hover{color:var(--ink); border-color:var(--ink-3)}
+
+.keys{
+  display:grid; grid-template-columns:repeat(auto-fit,minmax(268px,1fr)); gap:9px 30px;
+  border-top:1px solid var(--edge); padding-top:16px;
+}
+.keys h2{
+  grid-column:1/-1; margin:0 0 2px; font-family:"Chakra Petch",system-ui,sans-serif;
+  font-size:11.5px; letter-spacing:.2em; text-transform:uppercase; color:var(--ink-3); font-weight:600;
+}
+.k{display:flex; align-items:baseline; justify-content:space-between; gap:12px; font-size:13.5px; color:var(--ink-2)}
+.k span:first-child{white-space:nowrap}
+.k span:last-child{color:var(--ink-3); text-align:right}
+kbd{
+  font-family:"IBM Plex Mono",ui-monospace,monospace; font-size:11.5px; color:var(--ink);
+  background:rgba(255,255,255,.06); border:1px solid var(--edge); border-bottom-width:2px;
+  border-radius:4px; padding:2px 6px; white-space:nowrap;
+}
+.result{display:flex; align-items:baseline; gap:18px; flex-wrap:wrap}
+.result .final{
+  font-family:"IBM Plex Mono",ui-monospace,monospace; font-size:44px; font-weight:600;
+  font-variant-numeric:tabular-nums;
+}
+.result .final .a{color:var(--ember-lit)} .result .final .b{color:var(--ion-lit)}
+.stats{display:flex; gap:26px; flex-wrap:wrap; border-top:1px solid var(--edge); padding-top:14px}
+.stat{display:flex; flex-direction:column; gap:2px}
+.stat .v{font-family:"IBM Plex Mono",ui-monospace,monospace; font-size:22px; font-variant-numeric:tabular-nums}
+.stat .l{font-family:"Chakra Petch",system-ui,sans-serif; font-size:10.5px; letter-spacing:.18em; text-transform:uppercase; color:var(--ink-3)}
+.note{font-size:12.5px; color:var(--ink-3); margin:0}
+
+@media (max-width:640px){
+  .row{grid-template-columns:1fr; gap:8px}
+  .pod{right:14px; bottom:14px}
+  .gauge,.gauge-wrap{width:70px; height:70px}
+  .tagline{display:none}
+}
+@media (prefers-reduced-motion:reduce){
+  .pop{animation:none}
+  .go:hover{transform:none}
+}
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+
+<div class="layer" id="hud">
+  <div class="scoreboard">
+    <div class="side ember"><span class="name">Ember</span><span class="pts" id="scoreA">0</span></div>
+    <div class="clock"><span class="t" id="clock">5:00</span><span class="tag" id="clockTag">Match</span></div>
+    <div class="side ion"><span class="name">Ion</span><span class="pts" id="scoreB">0</span></div>
+  </div>
+
+  <div class="pod p1" id="pod1">
+    <div class="speed" id="speed1">0 <b>kph</b></div>
+    <div class="gauge-wrap"><div class="gauge" id="gauge1"></div><div class="num" id="boost1">33</div></div>
+  </div>
+  <div class="pod p2 hidden" id="pod2">
+    <div class="speed" id="speed2">0 <b>kph</b></div>
+    <div class="gauge-wrap"><div class="gauge" id="gauge2"></div><div class="num" id="boost2">33</div></div>
+  </div>
+  <div class="viewtag hidden" id="tag1">P1 · Ember</div>
+  <div class="viewtag hidden" id="tag2">P2 · Ion</div>
+
+  <div class="tagline" id="tagline">
+    <kbd>C</kbd> ball cam · <kbd>Esc</kbd> pause
+  </div>
+</div>
+
+<div class="layer" id="callout"></div>
+
+<div class="sheet" id="menu">
+  <div class="panel">
+    <div class="brand">
+      <div class="kicker">Car Soccer · Open Arena</div>
+      <h1>Nitro <em>Pitch</em></h1>
+      <p class="lede">Rocket-powered cars, one oversized ball, no rules worth mentioning.
+      Boost off the pads, flip into the ball, and bury it in the far net.</p>
+    </div>
+
+    <div class="options">
+      <div class="row">
+        <span class="lbl">Match</span>
+        <div class="seg" id="optTime">
+          <button data-v="120">2 min</button>
+          <button data-v="300" aria-pressed="true">5 min</button>
+          <button data-v="600">10 min</button>
+        </div>
+      </div>
+      <div class="row">
+        <span class="lbl">Players</span>
+        <div class="seg" id="optMode">
+          <button data-v="solo" aria-pressed="true">Solo vs bot</button>
+          <button data-v="split">2 players, split screen</button>
+        </div>
+      </div>
+      <div class="row" id="rowSkill">
+        <span class="lbl">Bot skill</span>
+        <div class="seg" id="optSkill">
+          <button data-v="0">Rookie</button>
+          <button data-v="1" aria-pressed="true">Pro</button>
+          <button data-v="2">All-star</button>
+        </div>
+      </div>
+      <div class="row">
+        <span class="lbl">Sound</span>
+        <div class="seg" id="optSound">
+          <button data-v="1" aria-pressed="true">On</button>
+          <button data-v="0">Off</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button class="go" id="startBtn">Kick off</button>
+      <span class="note" id="padNote">Gamepads work too — plug one in and press a button.</span>
+    </div>
+
+    <div class="keys" id="keysList"></div>
+  </div>
+</div>
+
+<div class="sheet hidden" id="pause">
+  <div class="panel">
+    <div class="brand">
+      <div class="kicker">Paused</div>
+      <h1 style="font-size:clamp(34px,6vw,58px)">Timeout</h1>
+    </div>
+    <div class="actions">
+      <button class="go" id="resumeBtn">Resume</button>
+      <button class="ghost" id="restartBtn">Restart match</button>
+      <button class="ghost" id="quitBtn">Back to menu</button>
+    </div>
+    <div class="keys" id="keysList2"></div>
+  </div>
+</div>
+
+<div class="sheet hidden" id="over">
+  <div class="panel">
+    <div class="brand">
+      <div class="kicker" id="overKicker">Full time</div>
+      <h1 id="overTitle" style="font-size:clamp(38px,7vw,72px)">Ember wins</h1>
+    </div>
+    <div class="result">
+      <div class="final"><span class="a" id="finalA">0</span> <span style="color:var(--ink-3)">–</span> <span class="b" id="finalB">0</span></div>
+    </div>
+    <div class="stats" id="overStats"></div>
+    <div class="actions">
+      <button class="go" id="rematchBtn">Rematch</button>
+      <button class="ghost" id="menuBtn">Change settings</button>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+/* =========================================================================
+   Nitro Pitch — rocket-powered car soccer.
+   One file, no dependencies: raw WebGL for the arena, hand-rolled physics.
+   ========================================================================= */
+
+const TAU = Math.PI * 2;
+const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+const lerp = (a, b, t) => a + (b - a) * t;
+const rnd = (a, b) => a + Math.random() * (b - a);
+function wrapAngle(a){ a %= TAU; if (a > Math.PI) a -= TAU; if (a < -Math.PI) a += TAU; return a; }
+function approach(v, target, rate, dt){
+  const d = target - v;
+  const step = rate * dt;
+  return Math.abs(d) <= step ? target : v + Math.sign(d) * step;
+}
+
+/* ---------- matrices (column-major, [col*4 + row]) ---------- */
+const m4 = {
+  make(){ return new Float32Array(16); },
+  ident(o){ o.fill(0); o[0] = o[5] = o[10] = o[15] = 1; return o; },
+  mul(o, a, b){
+    for (let c = 0; c < 4; c++){
+      const b0 = b[c*4], b1 = b[c*4+1], b2 = b[c*4+2], b3 = b[c*4+3];
+      for (let r = 0; r < 4; r++){
+        o[c*4+r] = a[r] * b0 + a[4+r] * b1 + a[8+r] * b2 + a[12+r] * b3;
+      }
+    }
+    return o;
+  },
+  perspective(o, fovy, aspect, near, far){
+    const f = 1 / Math.tan(fovy / 2);
+    o.fill(0);
+    o[0] = f / aspect; o[5] = f;
+    o[10] = (far + near) / (near - far); o[11] = -1;
+    o[14] = (2 * far * near) / (near - far);
+    return o;
+  },
+  lookAt(o, ex, ey, ez, cx, cy, cz, ux, uy, uz){
+    let zx = ex - cx, zy = ey - cy, zz = ez - cz;
+    let l = Math.hypot(zx, zy, zz) || 1; zx /= l; zy /= l; zz /= l;
+    let xx = uy * zz - uz * zy, xy = uz * zx - ux * zz, xz = ux * zy - uy * zx;
+    l = Math.hypot(xx, xy, xz) || 1; xx /= l; xy /= l; xz /= l;
+    const yx = zy * xz - zz * xy, yy = zz * xx - zx * xz, yz = zx * xy - zy * xx;
+    o[0] = xx; o[1] = yx; o[2] = zx; o[3] = 0;
+    o[4] = xy; o[5] = yy; o[6] = zy; o[7] = 0;
+    o[8] = xz; o[9] = yz; o[10] = zz; o[11] = 0;
+    o[12] = -(xx * ex + xy * ey + xz * ez);
+    o[13] = -(yx * ex + yy * ey + yz * ez);
+    o[14] = -(zx * ex + zy * ey + zz * ez);
+    o[15] = 1;
+    return o;
+  },
+  /* yaw about Y, pitch about X (positive = nose up), roll about Z */
+  rig(o, x, y, z, yaw, pitch, roll, sx, sy, sz){
+    const cy = Math.cos(yaw), sy_ = Math.sin(yaw);
+    const cp = Math.cos(-pitch), sp = Math.sin(-pitch);
+    const cr = Math.cos(roll), sr = Math.sin(roll);
+    // R = Ry * Rx * Rz, stored column-major
+    o[0] = (cy * cr + sy_ * sp * sr) * sx;
+    o[1] = (cp * sr) * sx;
+    o[2] = (-sy_ * cr + cy * sp * sr) * sx;
+    o[3] = 0;
+    o[4] = (-cy * sr + sy_ * sp * cr) * sy;
+    o[5] = (cp * cr) * sy;
+    o[6] = (sy_ * sr + cy * sp * cr) * sy;
+    o[7] = 0;
+    o[8] = (sy_ * cp) * sz;
+    o[9] = (-sp) * sz;
+    o[10] = (cy * cp) * sz;
+    o[11] = 0;
+    o[12] = x; o[13] = y; o[14] = z; o[15] = 1;
+    return o;
+  },
+  rotAxis(o, ax, ay, az, ang){
+    const l = Math.hypot(ax, ay, az) || 1;
+    const x = ax / l, y = ay / l, z = az / l;
+    const c = Math.cos(ang), s = Math.sin(ang), t = 1 - c;
+    o[0] = t*x*x + c;   o[1] = t*x*y + s*z; o[2] = t*x*z - s*y; o[3] = 0;
+    o[4] = t*x*y - s*z; o[5] = t*y*y + c;   o[6] = t*y*z + s*x; o[7] = 0;
+    o[8] = t*x*z + s*y; o[9] = t*y*z - s*x; o[10] = t*z*z + c;  o[11] = 0;
+    o[12] = o[13] = o[14] = 0; o[15] = 1;
+    return o;
+  },
+  /* 3x3 inverse-transpose of the upper-left block, for normals */
+  normal(out3, m){
+    const a = m[0], b = m[1], c = m[2], d = m[4], e = m[5], f = m[6], g = m[8], h = m[9], i = m[10];
+    const A = e*i - f*h, B = f*g - d*i, C = d*h - e*g;
+    let det = a*A + b*B + c*C;
+    if (!det) det = 1e-6;
+    const id = 1 / det;
+    out3[0] = A * id;            out3[1] = (c*h - b*i) * id;  out3[2] = (b*f - c*e) * id;
+    out3[3] = B * id;            out3[4] = (a*i - c*g) * id;  out3[5] = (c*d - a*f) * id;
+    out3[6] = C * id;            out3[7] = (b*g - a*h) * id;  out3[8] = (a*e - b*d) * id;
+    return out3;
+  }
+};
+
+/* ---------- WebGL ---------- */
+const canvas = document.getElementById('gl');
+const gl = canvas.getContext('webgl', { antialias: true, alpha: false, powerPreference: 'high-performance' })
+        || canvas.getContext('experimental-webgl', { antialias: true, alpha: false });
+if (!gl){
+  document.getElementById('menu').innerHTML =
+    '<div class="panel"><div class="brand"><div class="kicker">No WebGL</div>' +
+    '<h1 style="font-size:44px">This browser can’t draw the arena</h1>' +
+    '<p class="lede">Nitro Pitch needs WebGL. Try a current desktop browser, or switch on ' +
+    'hardware acceleration in the browser settings.</p></div></div>';
+  throw new Error('WebGL unavailable');
+}
+
+const VERT = `
+attribute vec3 aPos; attribute vec3 aNorm; attribute vec3 aCol;
+uniform mat4 uProj, uView, uModel; uniform mat3 uNormMat;
+varying vec3 vN; varying vec3 vC; varying vec3 vW;
+void main(){
+  vec4 w = uModel * vec4(aPos, 1.0);
+  vW = w.xyz;
+  vN = normalize(uNormMat * aNorm);
+  vC = aCol;
+  gl_Position = uProj * uView * w;
+}`;
+
+const FRAG = `
+precision mediump float;
+uniform vec3 uTint; uniform float uAlpha; uniform float uEmis; uniform vec3 uCam; uniform vec3 uFog;
+varying vec3 vN; varying vec3 vC; varying vec3 vW;
+void main(){
+  vec3 base = vC * uTint;
+  vec3 n = normalize(vN);
+  vec3 key = normalize(vec3(0.30, 0.92, 0.24));
+  vec3 fill = normalize(vec3(-0.55, 0.42, -0.72));
+  float kd = max(dot(n, key), 0.0);
+  float fd = max(dot(n, fill), 0.0);
+  vec3 amb = mix(vec3(0.17, 0.20, 0.30), vec3(0.30, 0.35, 0.46), n.y * 0.5 + 0.5);
+  vec3 col = base * (amb + kd * vec3(1.0, 0.95, 0.86) * 0.82 + fd * vec3(0.35, 0.55, 0.9) * 0.30);
+  vec3 v = normalize(uCam - vW);
+  float rim = pow(1.0 - max(dot(n, v), 0.0), 3.0);
+  col += base * rim * 0.22 + base * uEmis;
+  col = col / (1.0 + col * 0.38);            // soft shoulder, keeps colour out of white
+  float f = clamp((length(uCam - vW) - 70.0) / 210.0, 0.0, 0.72);
+  col = mix(col, uFog, f);
+  gl_FragColor = vec4(col, uAlpha);
+}`;
+
+function compile(type, src){
+  const s = gl.createShader(type);
+  gl.shaderSource(s, src); gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
+  return s;
+}
+const prog = gl.createProgram();
+gl.attachShader(prog, compile(gl.VERTEX_SHADER, VERT));
+gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, FRAG));
+gl.linkProgram(prog);
+if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
+gl.useProgram(prog);
+
+const A = {
+  pos: gl.getAttribLocation(prog, 'aPos'),
+  norm: gl.getAttribLocation(prog, 'aNorm'),
+  col: gl.getAttribLocation(prog, 'aCol')
+};
+const U = {};
+for (const n of ['uProj','uView','uModel','uNormMat','uTint','uAlpha','uEmis','uCam','uFog'])
+  U[n] = gl.getUniformLocation(prog, n);
+gl.enableVertexAttribArray(A.pos);
+gl.enableVertexAttribArray(A.norm);
+gl.enableVertexAttribArray(A.col);
+
+const FOG = [0.035, 0.055, 0.095];
+
+/* ---------- mesh building ---------- */
+function Mesh(){ this.p = []; this.n = []; this.c = []; this.i = []; }
+Mesh.prototype.count = function(){ return this.p.length / 3; };
+Mesh.prototype.tri = function(a, b, c, col, na, nb, nc){
+  const base = this.count();
+  let nx, ny, nz;
+  if (!na){
+    const ux = b[0]-a[0], uy = b[1]-a[1], uz = b[2]-a[2];
+    const vx = c[0]-a[0], vy = c[1]-a[1], vz = c[2]-a[2];
+    nx = uy*vz - uz*vy; ny = uz*vx - ux*vz; nz = ux*vy - uy*vx;
+    const l = Math.hypot(nx, ny, nz) || 1; nx /= l; ny /= l; nz /= l;
+  }
+  const verts = [a, b, c], norms = [na || [nx,ny,nz], nb || [nx,ny,nz], nc || [nx,ny,nz]];
+  for (let k = 0; k < 3; k++){
+    this.p.push(verts[k][0], verts[k][1], verts[k][2]);
+    this.n.push(norms[k][0], norms[k][1], norms[k][2]);
+    this.c.push(col[0], col[1], col[2]);
+  }
+  this.i.push(base, base + 1, base + 2);
+  return this;
+};
+Mesh.prototype.quad = function(a, b, c, d, col){
+  this.tri(a, b, c, col); this.tri(a, c, d, col); return this;
+};
+Mesh.prototype.floorQuad = function(x0, x1, z0, z1, y, col){
+  const xa = Math.min(x0, x1), xb = Math.max(x0, x1);
+  const za = Math.min(z0, z1), zb = Math.max(z0, z1);
+  return this.quad([xa, y, za], [xa, y, zb], [xb, y, zb], [xb, y, za], col);
+};
+Mesh.prototype.box = function(cx, cy, cz, hx, hy, hz, col, top){
+  const x0 = cx-hx, x1 = cx+hx, y0 = cy-hy, y1 = cy+hy, z0 = cz-hz, z1 = cz+hz;
+  const t = top || col;
+  this.quad([x0,y1,z0],[x0,y1,z1],[x1,y1,z1],[x1,y1,z0], t);            // +Y
+  this.quad([x0,y0,z1],[x0,y0,z0],[x1,y0,z0],[x1,y0,z1], col);          // -Y
+  this.quad([x0,y0,z1],[x1,y0,z1],[x1,y1,z1],[x0,y1,z1], col);          // +Z
+  this.quad([x1,y0,z0],[x0,y0,z0],[x0,y1,z0],[x1,y1,z0], col);          // -Z
+  this.quad([x1,y0,z1],[x1,y0,z0],[x1,y1,z0],[x1,y1,z1], col);          // +X
+  this.quad([x0,y0,z0],[x0,y0,z1],[x0,y1,z1],[x0,y1,z0], col);          // -X
+  return this;
+};
+Mesh.prototype.sphere = function(r, seg, ring, colFn){
+  const base = this.count();
+  for (let j = 0; j <= ring; j++){
+    const v = j / ring, phi = v * Math.PI;
+    for (let k = 0; k <= seg; k++){
+      const u = k / seg, th = u * TAU;
+      const x = Math.sin(phi) * Math.cos(th), y = Math.cos(phi), z = Math.sin(phi) * Math.sin(th);
+      const col = colFn(u, v);
+      this.p.push(x*r, y*r, z*r); this.n.push(x, y, z); this.c.push(col[0], col[1], col[2]);
+    }
+  }
+  for (let j = 0; j < ring; j++){
+    for (let k = 0; k < seg; k++){
+      const a = base + j * (seg+1) + k, b = a + seg + 1;
+      this.i.push(a, a+1, b, a+1, b+1, b);
+    }
+  }
+  return this;
+};
+Mesh.prototype.disc = function(cx, cy, cz, r, seg, col){
+  const base = this.count();
+  this.p.push(cx, cy, cz); this.n.push(0,1,0); this.c.push(col[0], col[1], col[2]);
+  for (let k = 0; k <= seg; k++){
+    const t = k / seg * TAU;
+    this.p.push(cx + Math.cos(t)*r, cy, cz + Math.sin(t)*r);
+    this.n.push(0,1,0); this.c.push(col[0], col[1], col[2]);
+  }
+  for (let k = 0; k < seg; k++) this.i.push(base, base + 2 + k, base + 1 + k);
+  return this;
+};
+Mesh.prototype.ring = function(cx, cy, cz, r0, r1, seg, col, a0, a1){
+  a0 = a0 || 0; a1 = (a1 === undefined) ? TAU : a1;
+  const base = this.count();
+  for (let k = 0; k <= seg; k++){
+    const t = a0 + (a1 - a0) * (k / seg), co = Math.cos(t), si = Math.sin(t);
+    this.p.push(cx + co*r0, cy, cz + si*r0, cx + co*r1, cy, cz + si*r1);
+    this.n.push(0,1,0, 0,1,0);
+    this.c.push(col[0], col[1], col[2], col[0], col[1], col[2]);
+  }
+  for (let k = 0; k < seg; k++){
+    const a = base + k*2;
+    this.i.push(a, a+2, a+1, a+1, a+2, a+3);
+  }
+  return this;
+};
+
+function upload(mesh){
+  const mk = (arr, kind) => {
+    const b = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, b);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(arr), gl.STATIC_DRAW);
+    return b;
+  };
+  const ib = gl.createBuffer();
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ib);
+  const big = mesh.count() > 65535;
+  const idx = big ? new Uint32Array(mesh.i) : new Uint16Array(mesh.i);
+  if (big && !gl.getExtension('OES_element_index_uint')) console.warn('mesh too large for 16-bit indices');
+  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, idx, gl.STATIC_DRAW);
+  return { p: mk(mesh.p), n: mk(mesh.n), c: mk(mesh.c), i: ib, len: mesh.i.length,
+           type: big ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT };
+}
+
+const _nm = new Float32Array(9);
+function drawMesh(g, model, tint, alpha, emis){
+  gl.bindBuffer(gl.ARRAY_BUFFER, g.p); gl.vertexAttribPointer(A.pos, 3, gl.FLOAT, false, 0, 0);
+  gl.bindBuffer(gl.ARRAY_BUFFER, g.n); gl.vertexAttribPointer(A.norm, 3, gl.FLOAT, false, 0, 0);
+  gl.bindBuffer(gl.ARRAY_BUFFER, g.c); gl.vertexAttribPointer(A.col, 3, gl.FLOAT, false, 0, 0);
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, g.i);
+  gl.uniformMatrix4fv(U.uModel, false, model);
+  gl.uniformMatrix3fv(U.uNormMat, false, m4.normal(_nm, model));
+  gl.uniform3fv(U.uTint, tint || [1,1,1]);
+  gl.uniform1f(U.uAlpha, alpha === undefined ? 1 : alpha);
+  gl.uniform1f(U.uEmis, emis || 0);
+  gl.drawElements(gl.TRIANGLES, g.len, g.type, 0);
+}
+
+/* =========================================================================
+   Arena
+   ========================================================================= */
+const F = {
+  hx: 50,          // half width  (X)
+  hz: 80,          // half length (Z)
+  wall: 30,        // wall / ceiling height
+  goalHW: 13,      // goal mouth half width
+  goalH: 11,       // goal mouth height
+  goalD: 15        // depth of the net behind the line
+};
+const BALL_R = 3.2;
+const CAR = { hx: 1.55, hy: 0.85, hz: 2.9, rest: 1.15 };
+
+const COL = {
+  ember: [1.0, 0.46, 0.16],
+  ion:   [0.16, 0.76, 1.0],
+  floorA:[0.070, 0.105, 0.170],
+  floorB:[0.086, 0.125, 0.196],
+  line:  [0.58, 0.71, 0.90],
+  wall:  [0.125, 0.175, 0.260],
+  trim:  [0.200, 0.265, 0.370],
+  dark:  [0.045, 0.065, 0.105],
+  steel: [0.34, 0.39, 0.47],
+  tyre:  [0.055, 0.062, 0.078],
+  glass: [0.10, 0.15, 0.24],
+  white: [0.92, 0.95, 1.0],
+  gold:  [1.0, 0.80, 0.36]
+};
+const teamCol = t => (t === 0 ? COL.ember : COL.ion);
+const TEAM_NAME = ['Ember', 'Ion'];
+
+function buildArena(){
+  const m = new Mesh();
+  const { hx, hz, wall, goalHW, goalH, goalD } = F;
+
+  /* floor: subtle alternating panels so speed reads on the ground */
+  const nx = 10, nz = 16, px = (hx * 2) / nx, pz = (hz * 2) / nz;
+  for (let i = 0; i < nx; i++){
+    for (let j = 0; j < nz; j++){
+      const x0 = -hx + i * px, z0 = -hz + j * pz;
+      const c = ((i + j) & 1) ? COL.floorB : COL.floorA;
+      m.quad([x0, 0, z0], [x0, 0, z0 + pz], [x0 + px, 0, z0 + pz], [x0 + px, 0, z0], c);
+    }
+  }
+
+  /* markings, floated a hair above the deck */
+  const y = 0.04, LW = 0.35;
+  const stripeZ = (z, w, col) => m.floorQuad(-hx, hx, z - w, z + w, y, col);
+  stripeZ(0, LW * 1.4, COL.line);
+  m.ring(0, y, 0, 14 - LW, 14 + LW, 64, COL.line);
+  m.ring(0, y, 0, 0, 1.6, 20, COL.line);
+  for (const s of [-1, 1]){
+    const gz = s * hz;
+    // penalty arc + goal box in team colour
+    const c = s > 0 ? COL.ion : COL.ember;
+    m.ring(0, y, gz, 26 - LW, 26 + LW, 40, c, s > 0 ? Math.PI : 0, s > 0 ? TAU : Math.PI);
+    const bz = gz - s * 18;
+    m.floorQuad(-20, 20, bz - LW, bz + LW, y, c);
+    for (const sx of [-1, 1]) m.floorQuad(sx * 20 - LW, sx * 20 + LW, bz, gz, y, c);
+  }
+
+  /* side walls */
+  for (const sx of [-1, 1]){
+    m.box(sx * (hx + 1), wall / 2, 0, 1, wall / 2, hz + 1, COL.wall, COL.trim);
+    m.box(sx * (hx - 0.1), 1.1, 0, 0.4, 1.1, hz, COL.trim);              // kick plate
+    m.box(sx * (hx - 0.1), wall - 0.6, 0, 0.4, 0.5, hz, COL.trim);        // top rail
+  }
+
+  /* end walls, with the goal mouth cut out, plus the net box behind */
+  for (const s of [-1, 1]){
+    const z = s * (hz + 1), col = s > 0 ? COL.ion : COL.ember;
+    const side = (hx - goalHW) / 2;
+    for (const sx of [-1, 1])
+      m.box(sx * (goalHW + side), wall / 2, z, side, wall / 2, 1, COL.wall, COL.trim);
+    m.box(0, (wall + goalH) / 2, z, goalHW, (wall - goalH) / 2, 1, COL.wall, COL.trim);
+
+    /* net box */
+    const zb = s * (hz + goalD);
+    m.floorQuad(-goalHW, goalHW, s * hz, zb, 0, COL.dark);
+    m.box(0, goalH / 2, zb, goalHW + 1, goalH / 2 + 1, 0.6, COL.dark);
+    for (const sx of [-1, 1]) m.box(sx * (goalHW + 0.5), goalH / 2, s * (hz + goalD / 2), 0.5, goalH / 2, goalD / 2, COL.dark);
+    m.box(0, goalH + 0.5, s * (hz + goalD / 2), goalHW + 1, 0.5, goalD / 2, COL.dark);
+
+    /* netting: thin bars across the back of the goal */
+    for (let i = -6; i <= 6; i++)
+      m.box(i * (goalHW / 6.5), goalH / 2, zb - s * 0.7, 0.09, goalH / 2, 0.09, COL.steel);
+    for (let j = 1; j <= 5; j++)
+      m.box(0, j * (goalH / 6), zb - s * 0.7, goalHW, 0.09, 0.09, COL.steel);
+
+    /* mouth frame, lit in the defending team's colour */
+    m.box(0, goalH, z, goalHW + 0.6, 0.55, 1.05, col);
+    for (const sx of [-1, 1]) m.box(sx * (goalHW + 0.3), goalH / 2, z, 0.55, goalH / 2, 1.05, col);
+    m.floorQuad(-goalHW, goalHW, s * hz - 0.35, s * hz + 0.35, 0.05, col);
+  }
+
+  /* corner posts with a team-tinted light strip */
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]){
+    m.box(sx * (hx + 1.6), wall / 2, sz * (hz + 1.6), 1.8, wall / 2, 1.8, COL.trim);
+    m.box(sx * (hx + 1.0), wall / 2, sz * (hz + 1.0), 0.35, wall / 2 - 2, 0.35, sz > 0 ? COL.ion : COL.ember);
+  }
+
+  /* stands: stepped terraces ringing the bowl, speckled with a crowd */
+  for (let tier = 0; tier < 7; tier++){
+    const out = 3 + tier * 4.2, h = wall + tier * 3.4;
+    const ex = hx + out, ez = hz + out;
+    const c = tier & 1 ? COL.dark : [0.06, 0.085, 0.135];
+    for (const sx of [-1, 1]) m.box(sx * (ex + 2.1), h / 2, 0, 2.1, h / 2, ez, c);
+    for (const sz of [-1, 1]) m.box(0, h / 2, sz * (ez + 2.1), ex + 4.2, h / 2, 2.1, c);
+    for (let k = 0; k < 46; k++){
+      const cc = Math.random() < 0.5 ? COL.ember : COL.ion;
+      const dim = 0.18 + Math.random() * 0.5;
+      const col = [cc[0] * dim, cc[1] * dim, cc[2] * dim];
+      const onSide = Math.random() < 0.55;
+      const bx = onSide ? (Math.random() < 0.5 ? -1 : 1) * (ex + 1.6) : rnd(-ex, ex);
+      const bz = onSide ? rnd(-ez, ez) : (Math.random() < 0.5 ? -1 : 1) * (ez + 1.6);
+      m.box(bx, h + 0.4, bz, 0.4, 0.5, 0.4, col);
+    }
+  }
+  return upload(m);
+}
+
+function buildCar(team){
+  const m = new Mesh();
+  const body = teamCol(team);
+  const shade = body.map(v => v * 0.62);
+  const light = body.map(v => Math.min(1, v * 1.35 + 0.1));
+  /* chassis */
+  m.box(0, 0.15, -0.1, 1.5, 0.5, 2.6, body, light);
+  /* nose wedge */
+  m.box(0, -0.05, 2.05, 1.35, 0.3, 0.75, shade, body);
+  /* skirts */
+  for (const sx of [-1, 1]) m.box(sx * 1.45, -0.32, -0.1, 0.16, 0.2, 2.3, COL.dark);
+  /* cabin */
+  m.box(0, 0.85, -0.45, 1.05, 0.4, 1.15, COL.glass, shade);
+  /* intakes + spoiler */
+  m.box(0, 0.62, 1.05, 0.9, 0.12, 0.5, COL.dark);
+  m.box(0, 1.0, -2.35, 1.3, 0.1, 0.42, COL.steel);
+  for (const sx of [-1, 1]) m.box(sx * 1.05, 0.72, -2.3, 0.12, 0.28, 0.24, COL.dark);
+  /* headlamps + tail lights */
+  for (const sx of [-1, 1]){
+    m.box(sx * 0.85, 0.05, 2.72, 0.35, 0.14, 0.1, COL.white);
+    m.box(sx * 0.85, 0.2, -2.62, 0.32, 0.12, 0.1, [0.9, 0.16, 0.1]);
+  }
+  /* wheels */
+  for (const sx of [-1, 1]) for (const sz of [1.75, -1.85]){
+    m.box(sx * 1.42, -0.5, sz, 0.28, 0.52, 0.52, COL.tyre);
+    m.box(sx * 1.5, -0.5, sz, 0.1, 0.3, 0.3, COL.steel);
+  }
+  /* rocket nozzles */
+  for (const sx of [-1, 1]) m.box(sx * 0.55, 0.1, -2.72, 0.26, 0.24, 0.14, COL.dark);
+  return upload(m);
+}
+
+const gArena = buildArena();
+const gCar = [buildCar(0), buildCar(1)];
+const gBall = upload(new Mesh().sphere(BALL_R, 28, 18, (u, v) => {
+  const panel = (Math.floor(u * 8) + Math.floor(v * 6)) & 1;
+  return panel ? [0.88, 0.91, 0.97] : [0.55, 0.60, 0.70];
+}));
+const gShadow = upload(new Mesh().disc(0, 0, 0, 1, 24, [0, 0, 0]));
+const gPad = upload(new Mesh().disc(0, 0, 0, 1, 6, COL.gold).ring(0, 0.02, 0, 1.05, 1.35, 6, COL.gold));
+const gCube = upload(new Mesh().box(0, 0, 0, 0.5, 0.5, 0.5, [1, 1, 1]));
+
+/* =========================================================================
+   Sound — a few synthesised cues, no assets
+   ========================================================================= */
+const Snd = {
+  on: true, ctx: null, master: null, boostGain: null, ready: false,
+  init(){
+    if (this.ctx) return;
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    this.ctx = new AC();
+    this.master = this.ctx.createGain();
+    this.master.gain.value = 0.55;
+    this.master.connect(this.ctx.destination);
+
+    const len = this.ctx.sampleRate * 2;
+    const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    this.noise = buf;
+
+    const src = this.ctx.createBufferSource();
+    src.buffer = buf; src.loop = true;
+    const bp = this.ctx.createBiquadFilter();
+    bp.type = 'bandpass'; bp.frequency.value = 620; bp.Q.value = 0.9;
+    this.boostGain = this.ctx.createGain();
+    this.boostGain.gain.value = 0;
+    src.connect(bp).connect(this.boostGain).connect(this.master);
+    src.start();
+    this.ready = true;
+  },
+  resume(){ if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume(); },
+  env(node, peak, attack, decay){
+    const t = this.ctx.currentTime, g = this.ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(peak, t + attack);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + attack + decay);
+    node.connect(g).connect(this.master);
+    return { g, stop: t + attack + decay + 0.05 };
+  },
+  thump(freq, peak, decay, type){
+    if (!this.ready || !this.on) return;
+    const o = this.ctx.createOscillator();
+    o.type = type || 'sine';
+    o.frequency.setValueAtTime(freq, this.ctx.currentTime);
+    o.frequency.exponentialRampToValueAtTime(Math.max(30, freq * 0.45), this.ctx.currentTime + decay);
+    const e = this.env(o, peak, 0.005, decay);
+    o.start(); o.stop(e.stop);
+  },
+  burst(peak, decay, freq, q){
+    if (!this.ready || !this.on) return;
+    const s = this.ctx.createBufferSource();
+    s.buffer = this.noise;
+    s.playbackRate.value = 0.7 + Math.random() * 0.6;
+    const f = this.ctx.createBiquadFilter();
+    f.type = 'bandpass'; f.frequency.value = freq; f.Q.value = q || 1.2;
+    s.connect(f);
+    const e = this.env(f, peak, 0.004, decay);
+    s.start(); s.stop(e.stop);
+  },
+  hit(power){                       // ball contact
+    const p = clamp(power / 60, 0.1, 1);
+    this.thump(120 + p * 70, 0.32 * p + 0.05, 0.16 + p * 0.2);
+    this.burst(0.10 * p, 0.09, 900 + p * 900, 1.1);
+  },
+  wall(power){ const p = clamp(power / 60, 0.05, 1); this.thump(70, 0.18 * p, 0.22); },
+  pad(big){ this.thump(big ? 420 : 620, 0.10, 0.12, 'triangle'); },
+  jump(){ this.burst(0.07, 0.07, 1500, 1.6); },
+  beep(freq, peak){ this.thump(freq, peak === undefined ? 0.16 : peak, 0.16, 'square'); },
+  horn(){
+    if (!this.ready || !this.on) return;
+    [196, 262, 330, 392].forEach((f, i) => {
+      const o = this.ctx.createOscillator();
+      o.type = 'sawtooth'; o.frequency.value = f;
+      const t = this.ctx.currentTime + i * 0.06, g = this.ctx.createGain();
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.linearRampToValueAtTime(0.14, t + 0.05);
+      g.gain.setValueAtTime(0.14, t + 0.8);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 1.5);
+      o.connect(g).connect(this.master);
+      o.start(t); o.stop(t + 1.6);
+    });
+  },
+  setBoost(v){
+    if (!this.ready) return;
+    const target = this.on ? v * 0.16 : 0;
+    this.boostGain.gain.setTargetAtTime(target, this.ctx.currentTime, 0.05);
+  }
+};
+
+/* =========================================================================
+   Input — keyboard plus gamepads
+   ========================================================================= */
+const keys = new Set();
+const edge = new Set();          // keys that went down since the last physics tick
+addEventListener('keydown', e => {
+  if (e.repeat) return;
+  const c = e.code;
+  if (['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Slash','Period','Comma','Tab'].includes(c)) e.preventDefault();
+  keys.add(c); edge.add(c);
+  Snd.init(); Snd.resume();
+  if (c === 'Escape') UI.togglePause();
+});
+addEventListener('keyup', e => keys.delete(e.code));
+addEventListener('blur', () => keys.clear());
+
+const SCHEME = [
+  { up:['KeyW'], down:['KeyS'], left:['KeyA'], right:['KeyD'],
+    boost:['ShiftLeft'], jump:['Space'], slide:['KeyV','ControlLeft'], cam:['KeyC'] },
+  { up:['ArrowUp'], down:['ArrowDown'], left:['ArrowLeft'], right:['ArrowRight'],
+    boost:['Slash'], jump:['Period'], slide:['Comma'], cam:['KeyM'] }
+];
+// Solo play also accepts the arrow cluster for player one.
+const SOLO_EXTRA = { up:['ArrowUp'], down:['ArrowDown'], left:['ArrowLeft'], right:['ArrowRight'],
+                     boost:['ShiftRight','Slash'], jump:['Period'], slide:['ControlRight'], cam:[] };
+
+const held = (list) => list.some(k => keys.has(k));
+const tapped = (list) => list.some(k => edge.has(k));
+
+function padFor(i){
+  const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+  let n = 0;
+  for (const p of pads) if (p && p.connected){ if (n === i) return p; n++; }
+  return null;
+}
+const padPrev = [new Set(), new Set()];
+function padEdge(idx, p, b){
+  const down = !!(p.buttons[b] && p.buttons[b].pressed);
+  const was = padPrev[idx].has(b);
+  if (down) padPrev[idx].add(b); else padPrev[idx].delete(b);
+  return down && !was;
+}
+
+function readInput(i, solo){
+  const s = SCHEME[i];
+  const inp = { throttle: 0, steer: 0, pitch: 0, boost: false, jump: false, slide: false, cam: false };
+  const up = held(s.up) || (solo && held(SOLO_EXTRA.up));
+  const dn = held(s.down) || (solo && held(SOLO_EXTRA.down));
+  const lf = held(s.left) || (solo && held(SOLO_EXTRA.left));
+  const rt = held(s.right) || (solo && held(SOLO_EXTRA.right));
+  inp.throttle = (up ? 1 : 0) - (dn ? 1 : 0);
+  inp.steer = (rt ? 1 : 0) - (lf ? 1 : 0);
+  inp.pitch = inp.throttle;
+  inp.boost = held(s.boost) || (solo && held(SOLO_EXTRA.boost));
+  inp.slide = held(s.slide) || (solo && held(SOLO_EXTRA.slide));
+  inp.jump = tapped(s.jump) || (solo && tapped(SOLO_EXTRA.jump));
+  inp.cam = tapped(s.cam);
+
+  const p = padFor(i);
+  if (p){
+    const ax = p.axes[0] || 0, ay = p.axes[1] || 0;
+    const dz = v => (Math.abs(v) < 0.18 ? 0 : v);
+    const rtrig = p.buttons[7] ? p.buttons[7].value : 0;
+    const ltrig = p.buttons[6] ? p.buttons[6].value : 0;
+    if (Math.abs(rtrig - ltrig) > 0.06) inp.throttle = clamp(rtrig - ltrig, -1, 1);
+    if (dz(ax)) inp.steer = clamp(dz(ax), -1, 1);
+    if (dz(ay)) inp.pitch = clamp(-dz(ay), -1, 1);
+    if (p.buttons[2] && p.buttons[2].pressed) inp.boost = true;
+    if (p.buttons[4] && p.buttons[4].pressed) inp.slide = true;
+    if (padEdge(i, p, 0)) inp.jump = true;
+    if (padEdge(i, p, 3)) inp.cam = true;
+    if (padEdge(i, p, 9)) UI.togglePause();
+  }
+  return inp;
+}
+
+/* =========================================================================
+   World state
+   ========================================================================= */
+const GRAV = 55;
+const MAXV = 62, SUPERV = 92;
+const THROTTLE_A = 52, BOOST_A = 66, BRAKE_A = 78, REV_A = 34, COAST_A = 15;
+const BOOST_USE = 33;
+
+const G = {
+  state: 'menu',
+  mode: 'solo', skill: 1, matchLen: 300,
+  clock: 300, overtime: false, endPending: false,
+  score: [0, 0],
+  countdown: 0, goalTimer: 0, lastGoal: null,
+  cars: [], pads: [], parts: [],
+  stats: { touches: [0, 0], shots: [0, 0], boost: [0, 0], top: [0, 0] },
+  elapsed: 0
+};
+
+const ball = { x: 0, y: BALL_R, z: 0, vx: 0, vy: 0, vz: 0, wx: 0, wy: 0, wz: 0, rot: m4.ident(m4.make()) };
+const _rotTmp = m4.make(), _rotTmp2 = m4.make();
+
+function makeCar(team, control, playerIdx){
+  return {
+    team, control, playerIdx,
+    x: 0, y: CAR.rest, z: 0, vx: 0, vy: 0, vz: 0,
+    yaw: 0, pitch: 0, roll: 0,
+    boost: 33, speed: 0, onGround: true, jumps: 0, sinceJump: 9,
+    dodgeT: 0, dodgePitch: 0, dodgeRoll: 0,
+    ballCam: true, supersonic: 0, flameT: 0, bumpT: 0,
+    aiNoiseX: 0, aiNoiseZ: 0, aiTimer: 0, aiJumpCd: 0,
+    mat: m4.make()
+  };
+}
+
+function buildPads(){
+  const pads = [];
+  const big = [[43, 0], [-43, 0], [43, 58], [-43, 58], [43, -58], [-43, -58]];
+  for (const [x, z] of big) pads.push({ x, z, big: true, amount: 100, t: 0, r: 2.6 });
+  const small = [];
+  for (const x of [-25, 0, 25]) for (const z of [-62, -32, 0, 32, 62]) if (x || z) small.push([x, z]);
+  for (const x of [-40, 40]) for (const z of [-30, 30]) small.push([x, z]);
+  for (const [x, z] of small) pads.push({ x, z, big: false, amount: 12, t: 0, r: 1.5 });
+  return pads;
+}
+
+/* particles: pooled, drawn as tiny lit cubes */
+function spawn(x, y, z, vx, vy, vz, life, size, col, emis, grav){
+  if (G.parts.length > 460) return;
+  G.parts.push({ x, y, z, vx, vy, vz, life, max: life, size, col, emis: emis === undefined ? 1 : emis,
+                 g: grav === undefined ? 1 : grav });
+}
+function stepParticles(dt){
+  for (let i = G.parts.length - 1; i >= 0; i--){
+    const p = G.parts[i];
+    p.life -= dt;
+    if (p.life <= 0){ G.parts.splice(i, 1); continue; }
+    p.vy -= GRAV * 0.45 * p.g * dt;
+    p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt;
+    if (p.y < 0.15){ p.y = 0.15; p.vy *= -0.35; p.vx *= 0.7; p.vz *= 0.7; }
+  }
+}
+
+/* =========================================================================
+   Physics
+   ========================================================================= */
+function inGoalMouth(x, y, pad){
+  return Math.abs(x) < F.goalHW - pad && y < F.goalH - pad;
+}
+
+function stepBall(dt){
+  ball.vy -= GRAV * dt;
+  const drag = Math.exp(-0.026 * dt);
+  ball.vx *= drag; ball.vy *= drag; ball.vz *= drag;
+
+  ball.x += ball.vx * dt; ball.y += ball.vy * dt; ball.z += ball.vz * dt;
+
+  const R = BALL_R;
+  let hit = 0;
+  // floor
+  if (ball.y - R < 0){
+    ball.y = R;
+    if (ball.vy < 0){
+      hit = -ball.vy;
+      ball.vy = ball.vy < -3 ? -ball.vy * 0.62 : 0;
+      ball.vx *= 0.985; ball.vz *= 0.985;
+    }
+  }
+  // ceiling
+  if (ball.y + R > F.wall){ ball.y = F.wall - R; if (ball.vy > 0){ hit = ball.vy; ball.vy *= -0.6; } }
+  // side walls
+  for (const s of [-1, 1]){
+    if (s * ball.x + R > F.hx){
+      ball.x = s * (F.hx - R);
+      if (s * ball.vx > 0){ hit = Math.abs(ball.vx); ball.vx *= -0.72; }
+    }
+  }
+  // end walls, open at the mouth
+  for (const s of [-1, 1]){
+    const past = s * ball.z + R > F.hz;
+    if (!past) continue;
+    if (inGoalMouth(ball.x, ball.y, R * 0.35)){
+      // inside the net box
+      if (s * ball.z + R > F.hz + F.goalD){
+        ball.z = s * (F.hz + F.goalD - R);
+        if (s * ball.vz > 0) ball.vz *= -0.35;
+      }
+      if (Math.abs(ball.x) + R > F.goalHW){
+        ball.x = Math.sign(ball.x) * (F.goalHW - R);
+        ball.vx *= -0.35;
+      }
+      if (ball.y + R > F.goalH){ ball.y = F.goalH - R; if (ball.vy > 0) ball.vy *= -0.35; }
+    } else {
+      ball.z = s * (F.hz - R);
+      if (s * ball.vz > 0){ hit = Math.abs(ball.vz); ball.vz *= -0.72; }
+    }
+  }
+  if (hit > 12){ Snd.wall(hit); }
+
+  // roll: spin follows the surface velocity while grounded, otherwise decays
+  if (ball.y - R < 0.25){
+    ball.wx = lerp(ball.wx, -ball.vz / R, 0.35);
+    ball.wz = lerp(ball.wz, ball.vx / R, 0.35);
+  } else {
+    ball.wx *= Math.exp(-0.35 * dt); ball.wy *= Math.exp(-0.35 * dt); ball.wz *= Math.exp(-0.35 * dt);
+  }
+  const w = Math.hypot(ball.wx, ball.wy, ball.wz);
+  if (w > 1e-4){
+    m4.rotAxis(_rotTmp, ball.wx, ball.wy, ball.wz, w * dt);
+    m4.mul(_rotTmp2, _rotTmp, ball.rot);
+    ball.rot.set(_rotTmp2);
+  }
+  const sp = Math.hypot(ball.vx, ball.vy, ball.vz);
+  if (sp > 115){ const k = 115 / sp; ball.vx *= k; ball.vy *= k; ball.vz *= k; }
+
+  if (sp > 55 && Math.random() < 0.5)
+    spawn(ball.x, ball.y, ball.z, rnd(-2,2), rnd(-2,2), rnd(-2,2), 0.3, 0.7, [0.7, 0.8, 1.0], 0.5, 0);
+}
+
+function stepCar(c, inp, dt){
+  const cy = Math.cos(c.yaw), sy = Math.sin(c.yaw);
+  // full orientation forward, used in the air
+  m4.rig(c.mat, c.x, c.y, c.z, c.yaw, c.pitch, c.roll, 1, 1, 1);
+  const fwd = [c.mat[8], c.mat[9], c.mat[10]];
+
+  const boosting = inp.boost && c.boost > 0;
+  if (boosting){
+    c.boost = Math.max(0, c.boost - BOOST_USE * dt);
+    G.stats.boost[c.team] += BOOST_USE * dt;
+  }
+
+  if (c.onGround){
+    let fs = c.vx * sy + c.vz * cy;            // forward speed
+    let lat = c.vx * cy - c.vz * sy;           // sideways slip
+    if (boosting) fs += BOOST_A * dt;
+    if (inp.throttle > 0) fs += THROTTLE_A * (1 - clamp(fs / MAXV, 0, 1)) * inp.throttle * dt;
+    else if (inp.throttle < 0) fs += (fs > 1 ? -BRAKE_A : -REV_A) * -inp.throttle * dt;
+    else fs = approach(fs, 0, COAST_A, dt);
+
+    if (fs > SUPERV) fs = SUPERV;
+    if (!boosting && fs > MAXV) fs = approach(fs, MAXV, 24, dt);
+    if (fs < -30) fs = -30;
+
+    const spAbs = Math.abs(fs);
+    const grip = clamp(spAbs / 7, 0, 1);
+    const turn = 3.0 * (1 - 0.52 * clamp(spAbs / MAXV, 0, 1)) * grip * (inp.slide ? 1.35 : 1);
+    c.yaw += inp.steer * turn * dt * (fs < -0.5 ? -1 : 1);
+
+    lat *= Math.exp(-(inp.slide ? 1.4 : 9.5) * dt);
+    if (inp.slide && Math.abs(lat) > 12 && Math.random() < 0.4)
+      spawn(c.x - sy * 2, 0.3, c.z - cy * 2, rnd(-3,3), rnd(1,4), rnd(-3,3), 0.35, 0.7, [0.6,0.62,0.7], 0.2, 0.4);
+
+    const cy2 = Math.cos(c.yaw), sy2 = Math.sin(c.yaw);
+    c.vx = sy2 * fs + cy2 * lat;
+    c.vz = cy2 * fs - sy2 * lat;
+    c.vy = 0;
+
+    c.pitch = approach(c.pitch, 0, 9, dt);
+    c.roll = approach(c.roll, 0, 9, dt);
+
+    if (inp.jump){
+      c.vy = 20; c.onGround = false; c.jumps = 1; c.sinceJump = 0;
+      Snd.jump();
+    }
+  } else {
+    c.vy -= GRAV * dt;
+    c.sinceJump += dt;
+    if (boosting){
+      c.vx += fwd[0] * BOOST_A * dt; c.vy += fwd[1] * BOOST_A * dt; c.vz += fwd[2] * BOOST_A * dt;
+    }
+    if (c.dodgeT > 0){
+      c.dodgeT -= dt;
+      c.pitch = wrapAngle(c.pitch + c.dodgePitch * dt);
+      c.roll = wrapAngle(c.roll + c.dodgeRoll * dt);
+    } else {
+      c.pitch = wrapAngle(c.pitch + inp.pitch * 3.4 * dt);
+      if (inp.slide) c.roll = wrapAngle(c.roll + inp.steer * 4.4 * dt);
+      else c.yaw = wrapAngle(c.yaw + inp.steer * 2.4 * dt);
+    }
+    if (inp.jump && c.jumps === 1){
+      c.jumps = 2;
+      if (c.sinceJump < 1.45 && (Math.abs(inp.throttle) > 0.25 || Math.abs(inp.steer) > 0.25)){
+        // directional flip
+        const dz = Math.abs(inp.pitch) > 0.25 ? Math.sign(inp.pitch) : 0;
+        const dx = Math.abs(inp.steer) > 0.25 ? Math.sign(inp.steer) : 0;
+        const l = Math.hypot(dx, dz) || 1;
+        const wx = sy * (dz / l) + cy * (dx / l);
+        const wz = cy * (dz / l) - sy * (dx / l);
+        c.vx += wx * 28; c.vz += wz * 28;
+        if (dz < 0) c.vy += 7;
+        c.dodgeT = 0.62;
+        c.dodgePitch = dz * -9; c.dodgeRoll = dx * 11;
+        c.flipT = 0.35;
+        Snd.jump();
+      } else {
+        c.vy = Math.max(c.vy, 0) + 15;
+        Snd.jump();
+      }
+    }
+  }
+
+  c.x += c.vx * dt; c.y += c.vy * dt; c.z += c.vz * dt;
+
+  // ground contact
+  if (c.y <= CAR.rest){
+    c.y = CAR.rest;
+    if (!c.onGround){
+      if (c.vy < -34) spawn(c.x, 0.4, c.z, rnd(-4,4), rnd(2,7), rnd(-4,4), 0.35, 0.8, [0.7,0.75,0.85], 0.4, 0.8);
+      c.vy = 0; c.onGround = true; c.jumps = 0; c.dodgeT = 0;
+    }
+  } else if (c.onGround && c.y > CAR.rest + 0.01){
+    c.onGround = false;
+  }
+  if (c.y + CAR.hy > F.wall){ c.y = F.wall - CAR.hy; if (c.vy > 0) c.vy = 0; }
+
+  // walls
+  const lim = F.hx - CAR.hz * 0.75;
+  for (const s of [-1, 1]){
+    if (s * c.x > lim){ c.x = s * lim; if (s * c.vx > 0) c.vx *= -0.2; }
+  }
+  for (const s of [-1, 1]){
+    if (s * c.z > F.hz - CAR.hz * 0.75){
+      if (inGoalMouth(c.x, c.y, CAR.hx)){
+        const deep = F.hz + F.goalD - CAR.hz;
+        if (s * c.z > deep){ c.z = s * deep; if (s * c.vz > 0) c.vz *= -0.2; }
+        if (Math.abs(c.x) > F.goalHW - CAR.hx){
+          c.x = Math.sign(c.x) * (F.goalHW - CAR.hx); c.vx *= -0.2;
+        }
+      } else {
+        c.z = s * (F.hz - CAR.hz * 0.75);
+        if (s * c.vz > 0) c.vz *= -0.2;
+      }
+    }
+  }
+
+  const sp = Math.hypot(c.vx, c.vy, c.vz);
+  if (sp > SUPERV + 3){ const k = (SUPERV + 3) / sp; c.vx *= k; c.vy *= k; c.vz *= k; }
+  c.speed = sp;
+  c.supersonic = sp > MAXV + 8 ? 1 : 0;
+  if (sp > G.stats.top[c.team]) G.stats.top[c.team] = sp;
+
+  // exhaust
+  if (boosting){
+    const back = [-fwd[0], -fwd[1], -fwd[2]];
+    c.flameT = (c.flameT || 0) + dt;
+    while (c.flameT > 0.02){
+      c.flameT -= 0.02;
+      const col = c.team === 0 ? [1.0, 0.55, 0.16] : [0.35, 0.78, 1.0];
+      spawn(c.x + back[0] * 3.1 + rnd(-.25,.25), c.y + back[1] * 3.1 + 0.15, c.z + back[2] * 3.1 + rnd(-.25,.25),
+            back[0] * 16 + rnd(-2.5,2.5), back[1] * 16 + rnd(-1,2.5), back[2] * 16 + rnd(-2.5,2.5),
+            0.2, 0.5, col, 0.8, 0.1);
+    }
+  }
+  c.mat = m4.rig(c.mat, c.x, c.y, c.z, c.yaw, c.pitch, c.roll, 1, 1, 1);
+}
+
+/* car body (an oriented box) against the ball */
+const _cb = m4.make();
+function carBall(c){
+  m4.rig(_cb, 0, 0, 0, c.yaw, c.pitch, c.roll, 1, 1, 1);
+  const dx = ball.x - c.x, dy = ball.y - c.y, dz = ball.z - c.z;
+  // world -> local (rotation transpose)
+  const lx = _cb[0]*dx + _cb[1]*dy + _cb[2]*dz;
+  const ly = _cb[4]*dx + _cb[5]*dy + _cb[6]*dz;
+  const lz = _cb[8]*dx + _cb[9]*dy + _cb[10]*dz;
+  const qx = clamp(lx, -CAR.hx, CAR.hx), qy = clamp(ly, -CAR.hy, CAR.hy), qz = clamp(lz, -CAR.hz, CAR.hz);
+  let ex = lx - qx, ey = ly - qy, ez = lz - qz;
+  let d = Math.hypot(ex, ey, ez);
+  if (d > BALL_R) return;
+  if (d < 1e-4){ ex = 0; ey = 1; ez = 0; d = 1e-4; }
+  ex /= d; ey /= d; ez /= d;
+  // local -> world
+  const nx = _cb[0]*ex + _cb[4]*ey + _cb[8]*ez;
+  const ny = _cb[1]*ex + _cb[5]*ey + _cb[9]*ez;
+  const nz = _cb[2]*ex + _cb[6]*ey + _cb[10]*ez;
+
+  const push = BALL_R - d + 0.02;
+  ball.x += nx * push; ball.y += ny * push; ball.z += nz * push;
+
+  const rvx = ball.vx - c.vx, rvy = ball.vy - c.vy, rvz = ball.vz - c.vz;
+  const vn = rvx * nx + rvy * ny + rvz * nz;
+  if (vn > 0) return;
+
+  const mb = 30, mc = 190, e = 0.55;
+  const j = -(1 + e) * vn / (1 / mb + 1 / mc);
+  ball.vx += nx * j / mb; ball.vy += ny * j / mb; ball.vz += nz * j / mb;
+  c.vx -= nx * j / mc * 0.6; c.vy -= ny * j / mc * 0.6; c.vz -= nz * j / mc * 0.6;
+
+  // a driven hit carries more than a bounce; a flip carries more again
+  const drive = Math.max(0, c.vx * nx + c.vy * ny + c.vz * nz);
+  const kick = drive * (c.dodgeT > 0 ? 0.62 : 0.42);
+  ball.vx += nx * kick; ball.vy += ny * kick; ball.vz += nz * kick;
+
+  // tangential scrub gives the ball some spin
+  ball.wx += (-(rvz) * 0.02); ball.wz += (rvx * 0.02);
+
+  const power = Math.abs(vn) + drive;
+  Snd.hit(power);
+  G.stats.touches[c.team]++;
+  c.lastTouch = G.elapsed;
+  G.lastTouchTeam = c.team;
+  const toGoal = c.team === 0 ? ball.vz : -ball.vz;
+  if (toGoal > 42 && Math.abs(ball.x) < 34) G.stats.shots[c.team]++;
+  for (let k = 0; k < Math.min(10, 2 + power / 8); k++)
+    spawn(ball.x - nx * BALL_R, ball.y - ny * BALL_R, ball.z - nz * BALL_R,
+          rnd(-6,6) - nx*4, rnd(0,7), rnd(-6,6) - nz*4, 0.32, 0.8, [1, 0.92, 0.7], 1.1, 0.6);
+}
+
+function carCar(a, b){
+  const dx = b.x - a.x, dy = b.y - a.y, dz = b.z - a.z;
+  const d = Math.hypot(dx, dz);
+  if (d > 4.6 || Math.abs(dy) > 2.6 || d < 1e-3) return;
+  const nx = dx / d, nz = dz / d;
+  const overlap = (4.6 - d) * 0.5;
+  a.x -= nx * overlap; a.z -= nz * overlap;
+  b.x += nx * overlap; b.z += nz * overlap;
+  const rel = (b.vx - a.vx) * nx + (b.vz - a.vz) * nz;
+  if (rel < 0){
+    const imp = rel * 0.55;
+    a.vx += nx * imp; a.vz += nz * imp;
+    b.vx -= nx * imp; b.vz -= nz * imp;
+    if (Math.abs(rel) > 26){
+      const loser = a.speed > b.speed ? b : a;
+      loser.yaw += rnd(-1.2, 1.2); loser.vy = 12; loser.onGround = false; loser.jumps = 2;
+      Snd.wall(Math.abs(rel));
+      for (let k = 0; k < 12; k++)
+        spawn((a.x + b.x)/2, 1.4, (a.z + b.z)/2, rnd(-9,9), rnd(1,9), rnd(-9,9), 0.4, 0.8, [1,0.85,0.55], 1.2, 0.8);
+    }
+  }
+}
+
+function collectPads(c, dt){
+  for (const p of G.pads){
+    if (p.t > 0){ continue; }
+    const dx = c.x - p.x, dz = c.z - p.z;
+    if (dx*dx + dz*dz < (p.r + 2.2) * (p.r + 2.2) && c.y < (p.big ? 6 : 4)){
+      if (c.boost >= 100 && !p.big) continue;
+      c.boost = Math.min(100, c.boost + p.amount);
+      p.t = p.big ? 10 : 4;
+      Snd.pad(p.big);
+      for (let k = 0; k < (p.big ? 14 : 6); k++)
+        spawn(p.x, 0.4, p.z, rnd(-5,5), rnd(3,10), rnd(-5,5), 0.4, 0.7, COL.gold, 1.3, 0.7);
+    }
+  }
+}
+
+/* =========================================================================
+   Bot driver
+   ========================================================================= */
+const AI_PARAM = [
+  { lead: 0.40, err: 10.0, think: 0.60, jump: 0.020, flip: 0.05, top: 50, hunt: 18, name: 'Rookie' },
+  { lead: 0.80, err: 4.5,  think: 0.36, jump: 0.055, flip: 0.13, top: 72, hunt: 32, name: 'Pro' },
+  { lead: 1.15, err: 1.6,  think: 0.22, jump: 0.110, flip: 0.22, top: 92, hunt: 44, name: 'All-star' }
+];
+
+function nearestPad(c, minAmount){
+  let best = null, bd = 1e9;
+  for (const p of G.pads){
+    if (p.t > 0 || p.amount < minAmount) continue;
+    const d = (p.x - c.x) ** 2 + (p.z - c.z) ** 2;
+    if (d < bd){ bd = d; best = p; }
+  }
+  return best;
+}
+
+function aiInput(c, dt){
+  const inp = { throttle: 0, steer: 0, pitch: 0, boost: false, jump: false, slide: false, cam: false };
+  if (G.state !== 'play') return inp;
+  const P = AI_PARAM[G.skill];
+  const attack = c.team === 0 ? 1 : -1;          // the direction of the net it shoots at
+  const ownZ = -attack * F.hz;
+
+  c.aiTimer -= dt;
+  if (c.aiTimer <= 0){
+    c.aiTimer = P.think;
+    c.aiNoiseX = rnd(-P.err, P.err);
+    c.aiNoiseZ = rnd(-P.err, P.err);
+  }
+  c.aiJumpCd = Math.max(0, c.aiJumpCd - dt);
+
+  const flat = Math.hypot(ball.x - c.x, ball.z - c.z);
+  const lead = clamp(flat / 70, 0, P.lead);
+  let bx = ball.x + ball.vx * lead;
+  let bz = ball.z + ball.vz * lead;
+  let by = ball.y + ball.vy * lead - 0.5 * GRAV * lead * lead;
+  if (by < BALL_R) by = BALL_R;
+  bx = clamp(bx, -F.hx + 4, F.hx - 4);
+  bz = clamp(bz, -F.hz - 4, F.hz + 4);
+
+  // stand off behind the ball, on the line through the opposing net
+  let ax = bx - 0, az = bz - attack * F.hz;
+  const al = Math.hypot(ax, az) || 1; ax /= al; az /= al;
+  let tx = bx + ax * (BALL_R + 2.6), tz = bz + az * (BALL_R + 2.6);
+
+  const behind = attack > 0 ? ball.z < c.z - 5 : ball.z > c.z + 5;
+  const threat = attack > 0 ? ball.z < -14 : ball.z > 14;
+  let defending = false;
+  if (behind && threat){
+    defending = true;
+    tx = clamp(ball.x * 0.4, -11, 11);
+    tz = ownZ + attack * 11;
+  } else if (c.boost < P.hunt && flat > 46){
+    const p = nearestPad(c, flat > 70 ? 100 : 12);
+    if (p){ tx = p.x; tz = p.z; }
+  }
+  tx += c.aiNoiseX * (defending ? 0.3 : 1);
+  tz += c.aiNoiseZ * (defending ? 0.3 : 1);
+
+  c.aiTx = tx; c.aiTz = tz; c.aiDef = defending;
+  const dxT = tx - c.x, dzT = tz - c.z;
+  const d2 = Math.hypot(dxT, dzT);
+  const want = Math.atan2(dxT, dzT);
+  const diff = wrapAngle(want - c.yaw);
+
+  if (Math.abs(diff) > 2.1 && d2 < 20){
+    inp.throttle = -1;
+    inp.steer = clamp(-diff * 1.6, -1, 1);
+  } else {
+    inp.throttle = 1;
+    inp.steer = clamp(diff * 2.0, -1, 1);
+    inp.slide = Math.abs(diff) > 1.15 && c.speed > 28;
+  }
+  if (defending && d2 < 6) inp.throttle = 0;
+
+  inp.boost = c.boost > 2 && Math.abs(diff) < 0.32 && d2 > 16 && c.speed < P.top;
+
+  if (c.onGround && c.aiJumpCd <= 0 && flat < 12 && by > 5.5 && by < 17 &&
+      Math.abs(diff) < 0.55 && Math.random() < P.jump){
+    inp.jump = true; c.aiJumpCd = 1.2;
+  }
+  if (!c.onGround && c.jumps === 1 && c.sinceJump > 0.09 && flat < 9 &&
+      Math.abs(diff) < 0.45 && Math.random() < P.flip){
+    inp.jump = true; inp.pitch = 1; inp.throttle = 1;
+  }
+  if (!c.onGround && c.jumps < 2) inp.pitch = clamp(-c.pitch * 2, -1, 1);
+  return inp;
+}
+
+/* =========================================================================
+   Cameras
+   ========================================================================= */
+function makeCam(){ return { x: 0, y: 14, z: -46, tx: 0, ty: 2, tz: 0, ready: false }; }
+const cams = [makeCam(), makeCam()];
+
+function updateCamera(cam, c, dt){
+  let dx, dz;
+  if (c.ballCam){
+    dx = c.x - ball.x; dz = c.z - ball.z;
+    const l = Math.hypot(dx, dz);
+    if (l < 7){ dx = -Math.sin(c.yaw); dz = -Math.cos(c.yaw); }
+    else { dx /= l; dz /= l; }
+  } else {
+    dx = -Math.sin(c.yaw); dz = -Math.cos(c.yaw);
+  }
+  const back = 16 + clamp(c.speed * 0.09, 0, 5);
+  const gx = c.x + dx * back;
+  const gz = c.z + dz * back;
+  const gy = c.y + 7.5 + clamp((c.y - CAR.rest) * 0.35, 0, 9);
+  const k = cam.ready ? 1 - Math.exp(-9 * dt) : 1;
+  cam.x = lerp(cam.x, gx, k);
+  cam.y = lerp(cam.y, Math.max(gy, 2.6), k);
+  cam.z = lerp(cam.z, gz, k);
+
+  let lx, ly, lz;
+  if (c.ballCam){
+    lx = lerp(c.x, ball.x, 0.55); ly = lerp(c.y + 1.6, ball.y, 0.45); lz = lerp(c.z, ball.z, 0.55);
+  } else {
+    lx = c.x - dx * 12; ly = c.y + 2.4; lz = c.z - dz * 12;
+  }
+  const k2 = cam.ready ? 1 - Math.exp(-11 * dt) : 1;
+  cam.tx = lerp(cam.tx, lx, k2); cam.ty = lerp(cam.ty, ly, k2); cam.tz = lerp(cam.tz, lz, k2);
+  cam.ready = true;
+}
+
+function menuCamera(t){
+  const cam = cams[0];
+  const a = t * 0.16;
+  cam.x = Math.sin(a) * 74; cam.z = Math.cos(a) * 74; cam.y = 22 + Math.sin(t * 0.3) * 5;
+  cam.tx = 0; cam.ty = 5; cam.tz = 0; cam.ready = false;
+  return cam;
+}
+
+/* =========================================================================
+   Drawing
+   ========================================================================= */
+const proj = m4.make(), view = m4.make(), model = m4.make();
+let dpr = 1;
+function resize(){
+  dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const w = Math.floor(innerWidth * dpr), h = Math.floor(innerHeight * dpr);
+  if (canvas.width !== w || canvas.height !== h){ canvas.width = w; canvas.height = h; }
+}
+addEventListener('resize', resize);
+resize();
+
+function drawScene(cam, vp, viewerTeam){
+  gl.viewport(vp.x, vp.y, vp.w, vp.h);
+  gl.scissor(vp.x, vp.y, vp.w, vp.h);
+  gl.enable(gl.SCISSOR_TEST);
+  gl.clearColor(FOG[0], FOG[1], FOG[2], 1);
+  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+  m4.perspective(proj, 1.22, vp.w / Math.max(1, vp.h), 0.4, 900);
+  m4.lookAt(view, cam.x, cam.y, cam.z, cam.tx, cam.ty, cam.tz, 0, 1, 0);
+  gl.uniformMatrix4fv(U.uProj, false, proj);
+  gl.uniformMatrix4fv(U.uView, false, view);
+  gl.uniform3f(U.uCam, cam.x, cam.y, cam.z);
+  gl.uniform3fv(U.uFog, FOG);
+
+  gl.enable(gl.DEPTH_TEST);
+  gl.depthMask(true);
+  gl.disable(gl.BLEND);
+  gl.disable(gl.CULL_FACE);
+
+  drawMesh(gArena, m4.ident(model), [1, 1, 1], 1, 0);
+
+  // boost pads
+  const pulse = 0.55 + 0.45 * Math.sin(G.elapsed * 3);
+  for (const p of G.pads){
+    const live = p.t <= 0;
+    const s = live ? p.r : p.r * 0.55;
+    m4.rig(model, p.x, 0.08, p.z, G.elapsed * (p.big ? 0.6 : 0.35), 0, 0, s, 1, s);
+    drawMesh(gPad, model, live ? COL.gold : [0.22, 0.24, 0.3], 1, live ? (p.big ? 1.5 : 0.9) * pulse : 0);
+  }
+
+  // cars
+  for (const c of G.cars){
+    drawMesh(gCar[c.team], c.mat, [1, 1, 1], 1, c.supersonic ? 0.25 : 0);
+  }
+
+  // ball
+  const brot = m4.make();
+  brot.set(ball.rot);
+  brot[12] = ball.x; brot[13] = ball.y; brot[14] = ball.z; brot[15] = 1;
+  const bspeed = Math.hypot(ball.vx, ball.vy, ball.vz);
+  drawMesh(gBall, brot, [1, 1, 1], 1, clamp((bspeed - 60) / 90, 0, 0.5));
+
+  // transparent pass
+  gl.depthMask(false);
+  gl.enable(gl.BLEND);
+  gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+  const shadow = (x, y, z, r) => {
+    const h = clamp(1 - (y - r) / 26, 0.12, 1);
+    m4.rig(model, x, 0.06, z, 0, 0, 0, r * (0.75 + h * 0.5), 1, r * (0.75 + h * 0.5));
+    drawMesh(gShadow, model, [0, 0, 0], 0.42 * h, 0);
+  };
+  shadow(ball.x, ball.y, ball.z, BALL_R);
+  for (const c of G.cars) shadow(c.x, c.y, c.z, 2.6);
+
+  // particles, additive
+  gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+  for (const p of G.parts){
+    const a = clamp(p.life / p.max, 0, 1);
+    const s = p.size * (0.5 + a * 0.9);
+    m4.rig(model, p.x, p.y, p.z, p.x + p.z, p.y, 0, s, s, s);
+    drawMesh(gCube, model, p.col, a * 0.9, p.emis);
+  }
+
+  gl.disable(gl.BLEND);
+  gl.depthMask(true);
+  gl.disable(gl.SCISSOR_TEST);
+}
+
+/* =========================================================================
+   Match flow + interface
+   ========================================================================= */
+const $ = id => document.getElementById(id);
+const KICKOFFS = [[0, 34], [24, 42], [-24, 42], [17, 30], [-17, 30]];
+let kickIdx = 0;
+
+function placeKickoff(){
+  ball.x = 0; ball.y = BALL_R; ball.z = 0;
+  ball.vx = ball.vy = ball.vz = 0; ball.wx = ball.wy = ball.wz = 0;
+  m4.ident(ball.rot);
+  const spot = KICKOFFS[kickIdx % KICKOFFS.length];
+  kickIdx++;
+  for (const c of G.cars){
+    const side = c.team === 0 ? -1 : 1;
+    c.x = spot[0] * -side; c.z = side * spot[1]; c.y = CAR.rest;
+    c.vx = c.vy = c.vz = 0;
+    c.yaw = Math.atan2(-c.x, -c.z);
+    c.pitch = c.roll = 0; c.onGround = true; c.jumps = 0; c.dodgeT = 0; c.sinceJump = 9;
+    c.boost = 33; c.speed = 0; c.supersonic = 0;
+    m4.rig(c.mat, c.x, c.y, c.z, c.yaw, 0, 0, 1, 1, 1);
+  }
+  for (const p of G.pads) p.t = 0;
+}
+
+function buildCars(){
+  G.cars = G.mode === 'split'
+    ? [makeCar(0, 'human', 0), makeCar(1, 'human', 1)]
+    : [makeCar(0, 'human', 0), makeCar(1, 'ai', -1)];
+  G.pads = buildPads();
+}
+
+function kickoff(){
+  placeKickoff();
+  G.parts.length = 0;
+  G.state = 'countdown';
+  G.countdown = 3.05;
+  G.nextBeep = 4;
+  UI.callout('');
+}
+
+function startMatch(){
+  G.score = [0, 0];
+  G.stats = { touches: [0, 0], shots: [0, 0], boost: [0, 0], top: [0, 0] };
+  G.clock = G.matchLen;
+  G.overtime = false; G.endPending = false; G.lastGoal = null; G.lastTouchTeam = null;
+  buildCars();
+  cams.forEach(c => { c.ready = false; });
+  $('menu').classList.add('hidden');
+  $('over').classList.add('hidden');
+  $('pause').classList.add('hidden');
+  $('hud').classList.add('on');
+  UI.layout();
+  Snd.init(); Snd.resume();
+  kickoff();
+}
+
+function score(team){
+  G.score[team]++;
+  G.state = 'goal';
+  G.goalTimer = 3.4;
+  const own = G.lastTouchTeam !== null && G.lastTouchTeam !== team;
+  G.lastGoal = { team, own };
+  Snd.horn();
+  for (let k = 0; k < 130; k++){
+    const col = k % 3 === 0 ? [1, 1, 0.9] : teamCol(team);
+    spawn(ball.x, Math.max(2, ball.y), ball.z,
+          rnd(-34, 34), rnd(2, 34), rnd(-34, 34), rnd(0.6, 1.5), rnd(0.6, 1.5), col, 1.3, 0.55);
+  }
+  UI.goalBanner(team, own);
+  UI.hud();
+}
+
+function finishMatch(){
+  if (G.score[0] === G.score[1]){
+    G.overtime = true; G.endPending = false; G.clock = 0;
+    UI.callout('<div class="count pop">Overtime</div>', 2.0);
+    kickoff();
+    return;
+  }
+  G.state = 'over';
+  Snd.beep(300, 0.2);
+  UI.showOver();
+}
+
+const UI = {
+  callout(html, hold){
+    const el = $('callout');
+    el.innerHTML = html;
+    this.calloutT = hold || 0;
+  },
+  goalBanner(team, own){
+    const name = TEAM_NAME[team];
+    const col = team === 0 ? 'var(--ember)' : 'var(--ion)';
+    this.callout(
+      '<div><div class="goal pop" style="color:' + col + '">Goal</div>' +
+      '<div class="by">' + (own ? 'Own goal · ' : '') + name + ' ' + G.score[0] + ' – ' + G.score[1] + '</div></div>', 3.0);
+  },
+  togglePause(){
+    if (G.state === 'menu' || G.state === 'over') return;
+    if (G.state === 'paused'){
+      G.state = G.prevState;
+      $('pause').classList.add('hidden');
+    } else {
+      G.prevState = G.state;
+      G.state = 'paused';
+      $('pause').classList.remove('hidden');
+      Snd.setBoost(0);
+    }
+  },
+  quit(){
+    G.state = 'menu';
+    $('pause').classList.add('hidden');
+    $('over').classList.add('hidden');
+    $('menu').classList.remove('hidden');
+    $('hud').classList.remove('on');
+    Snd.setBoost(0);
+    buildCars(); placeKickoff();
+  },
+  layout(){
+    const split = G.mode === 'split';
+    $('pod2').classList.toggle('hidden', !split);
+    $('tag1').classList.toggle('hidden', !split);
+    $('tag2').classList.toggle('hidden', !split);
+    $('pod1').style.bottom = split ? 'calc(50% + 14px)' : '20px';
+    $('pod2').style.bottom = '14px';
+    $('tag1').style.top = '58px';
+    $('tag2').style.top = 'calc(50% + 14px)';
+    $('tagline').classList.toggle('hidden', split);
+  },
+  hud(){
+    $('scoreA').textContent = G.score[0];
+    $('scoreB').textContent = G.score[1];
+    const t = Math.max(0, G.overtime ? G.clock : G.clock);
+    const mm = Math.floor(t / 60), ss = Math.floor(t % 60);
+    const el = $('clock');
+    el.textContent = (G.overtime ? '+' : '') + mm + ':' + String(ss).padStart(2, '0');
+    el.classList.toggle('low', !G.overtime && G.clock <= 30);
+    const tag = $('clockTag');
+    tag.textContent = G.overtime ? 'Golden goal' : (G.endPending ? 'Last touch' : 'Match');
+    tag.classList.toggle('ot', G.overtime);
+
+    for (let i = 0; i < 2; i++){
+      const car = G.cars.find(c => c.control === 'human' && c.playerIdx === i);
+      if (!car) continue;
+      const g = $('gauge' + (i + 1));
+      if (!g) continue;
+      g.style.setProperty('--p', Math.round(car.boost));
+      $('boost' + (i + 1)).textContent = Math.round(car.boost);
+      const kph = Math.round((car.speed || 0) * 2.4);
+      $('speed' + (i + 1)).innerHTML = kph + ' <b class="' + (car.supersonic ? 'super' : '') + '">kph</b>';
+    }
+  },
+  showOver(){
+    const a = G.score[0], b = G.score[1];
+    const winner = a > b ? 0 : 1;
+    $('overKicker').textContent = G.overtime ? 'Golden goal' : 'Full time';
+    let title = TEAM_NAME[winner] + ' wins';
+    if (G.mode === 'solo') title = winner === 0 ? 'You win' : 'Bot takes it';
+    else title = 'Player ' + (winner + 1) + ' wins';
+    $('overTitle').textContent = title;
+    $('finalA').textContent = a;
+    $('finalB').textContent = b;
+    const S = G.stats;
+    const rows = [
+      ['Touches', S.touches[0] + ' – ' + S.touches[1]],
+      ['Shots', S.shots[0] + ' – ' + S.shots[1]],
+      ['Boost burned', Math.round(S.boost[0]) + ' – ' + Math.round(S.boost[1])],
+      ['Top speed', Math.round(S.top[0] * 2.4) + ' – ' + Math.round(S.top[1] * 2.4) + ' kph']
+    ];
+    $('overStats').innerHTML = rows.map(r =>
+      '<div class="stat"><span class="v">' + r[1] + '</span><span class="l">' + r[0] + '</span></div>').join('');
+    $('over').classList.remove('hidden');
+    $('hud').classList.remove('on');
+  }
+};
+
+/* controls reference, rendered into both the menu and the pause sheet */
+function keysMarkup(){
+  const rows = [
+    ['Drive / reverse', '<kbd>W</kbd><kbd>S</kbd> or <kbd>↑</kbd><kbd>↓</kbd>'],
+    ['Steer', '<kbd>A</kbd><kbd>D</kbd> or <kbd>←</kbd><kbd>→</kbd>'],
+    ['Boost', '<kbd>Shift</kbd>'],
+    ['Jump · flip', '<kbd>Space</kbd> ×2 with a direction'],
+    ['Powerslide · air roll', '<kbd>V</kbd>'],
+    ['Ball cam', '<kbd>C</kbd>'],
+    ['Pause', '<kbd>Esc</kbd>']
+  ];
+  const p2 = [
+    ['Drive · steer', '<kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd>'],
+    ['Boost', '<kbd>/</kbd>'],
+    ['Jump · flip', '<kbd>.</kbd>'],
+    ['Powerslide', '<kbd>,</kbd>'],
+    ['Ball cam', '<kbd>M</kbd>']
+  ];
+  const fmt = list => list.map(r => '<div class="k"><span>' + r[0] + '</span><span>' + r[1] + '</span></div>').join('');
+  return '<h2>Player one · keyboard</h2>' + fmt(rows) +
+         '<h2>Player two · split screen</h2>' + fmt(p2);
+}
+$('keysList').innerHTML = keysMarkup();
+$('keysList2').innerHTML = keysMarkup();
+
+/* option buttons */
+function wireSeg(id, fn){
+  const box = $(id);
+  box.addEventListener('click', e => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    for (const other of box.querySelectorAll('button')) other.setAttribute('aria-pressed', String(other === b));
+    fn(b.dataset.v);
+    Snd.init(); Snd.resume();
+  });
+}
+wireSeg('optTime', v => { G.matchLen = +v; G.clock = +v; });
+wireSeg('optMode', v => {
+  G.mode = v;
+  $('rowSkill').style.opacity = v === 'split' ? 0.35 : 1;
+  buildCars(); placeKickoff(); UI.layout();
+});
+wireSeg('optSkill', v => { G.skill = +v; });
+wireSeg('optSound', v => {
+  Snd.on = v === '1';
+  if (!Snd.on) Snd.setBoost(0);
+});
+
+$('startBtn').addEventListener('click', startMatch);
+$('rematchBtn').addEventListener('click', startMatch);
+$('menuBtn').addEventListener('click', () => UI.quit());
+$('resumeBtn').addEventListener('click', () => UI.togglePause());
+$('restartBtn').addEventListener('click', () => { $('pause').classList.add('hidden'); startMatch(); });
+$('quitBtn').addEventListener('click', () => UI.quit());
+
+/* =========================================================================
+   Main loop
+   ========================================================================= */
+const STEP = 1 / 120;
+let acc = 0, last = performance.now();
+
+function gatherInputs(dt){
+  const solo = G.mode === 'solo';
+  const list = [];
+  const live = G.state === 'play' || G.state === 'goal';
+  for (const c of G.cars){
+    let inp;
+    if (c.control === 'human') inp = readInput(c.playerIdx, solo);
+    else inp = aiInput(c, dt);
+    if (inp.cam) c.ballCam = !c.ballCam;
+    if (!live){
+      inp = { throttle: 0, steer: 0, pitch: 0, boost: false, jump: false, slide: false, cam: false };
+    }
+    list.push(inp);
+  }
+  edge.clear();
+  return list;
+}
+
+function simulate(inputs, dt){
+  acc += dt;
+  let guard = 0;
+  while (acc >= STEP && guard++ < 8){
+    acc -= STEP;
+    for (let i = 0; i < G.cars.length; i++){
+      stepCar(G.cars[i], inputs[i], STEP);
+      inputs[i].jump = false;                 // a press fires once, not once per substep
+    }
+    stepBall(STEP);
+    for (const c of G.cars) carBall(c);
+    for (let i = 0; i < G.cars.length; i++)
+      for (let j = i + 1; j < G.cars.length; j++) carCar(G.cars[i], G.cars[j]);
+    for (const c of G.cars) collectPads(c, STEP);
+    for (const p of G.pads) if (p.t > 0) p.t = Math.max(0, p.t - STEP);
+  }
+  if (guard >= 8) acc = 0;
+}
+
+function frame(now){
+  requestAnimationFrame(frame);
+  const dt = Math.min((now - last) / 1000, 0.1);
+  last = now;
+  G.elapsed += dt;
+  resize();
+
+  if (G.state === 'countdown'){
+    G.countdown -= dt;
+    const n = Math.ceil(G.countdown);
+    if (n < G.nextBeep && n >= 1){ G.nextBeep = n; Snd.beep(520 + (3 - n) * 60); UI.callout('<div class="count pop">' + n + '</div>'); }
+    if (G.countdown <= 0){
+      G.state = 'play';
+      Snd.beep(880, 0.22);
+      UI.callout('<div class="count pop">Go</div>', 0.7);
+    }
+  }
+
+  const inputs = gatherInputs(dt);
+
+  if (G.state === 'play' || G.state === 'goal'){
+    simulate(inputs, dt);
+    if (G.state === 'play'){
+      if (!G.overtime){
+        G.clock -= dt;
+        if (G.clock <= 0){ G.clock = 0; G.endPending = true; }
+      } else G.clock += dt;
+
+      if (ball.z - BALL_R > F.hz) score(0);
+      else if (ball.z + BALL_R < -F.hz) score(1);
+      else if (G.endPending && ball.y - BALL_R < 0.4) finishMatch();
+    }
+  } else if (G.state !== 'paused'){
+    for (const c of G.cars) m4.rig(c.mat, c.x, c.y, c.z, c.yaw, c.pitch, c.roll, 1, 1, 1);
+  }
+
+  if (G.state === 'goal'){
+    G.goalTimer -= dt;
+    if (G.goalTimer <= 0){
+      if (G.overtime || G.endPending) finishMatch();
+      else kickoff();
+    }
+  }
+
+  if (G.state !== 'paused') stepParticles(dt);
+
+  // boost hum follows whichever human is burning boost
+  let boostLevel = 0;
+  for (let i = 0; i < G.cars.length; i++){
+    const c = G.cars[i];
+    if (c.control === 'human' && inputs[i] && inputs[i].boost && c.boost > 0) boostLevel = 1;
+  }
+  Snd.setBoost(G.state === 'play' ? boostLevel : 0);
+
+  // cameras
+  if (G.state === 'menu'){
+    menuCamera(G.elapsed);
+  } else {
+    const humans = G.cars.filter(c => c.control === 'human');
+    const view0 = humans[0] || G.cars[0];
+    updateCamera(cams[0], view0, G.state === 'paused' ? 0 : dt);
+    if (G.mode === 'split' && humans[1]) updateCamera(cams[1], humans[1], G.state === 'paused' ? 0 : dt);
+  }
+
+  // callout fade
+  if (UI.calloutT > 0){
+    UI.calloutT -= dt;
+    if (UI.calloutT <= 0) $('callout').innerHTML = '';
+  }
+
+  // draw
+  const W = canvas.width, H = canvas.height;
+  if (G.mode === 'split' && G.state !== 'menu'){
+    const half = Math.floor(H / 2);
+    drawScene(cams[0], { x: 0, y: half, w: W, h: H - half });
+    drawScene(cams[1], { x: 0, y: 0, w: W, h: half });
+  } else {
+    drawScene(cams[0], { x: 0, y: 0, w: W, h: H });
+  }
+
+  if (G.state !== 'menu') UI.hud();
+}
+
+buildCars();
+placeKickoff();
+UI.layout();
+$('hud').classList.remove('on');
+requestAnimationFrame(now => { last = now; frame(now); });
+</script>
+</body>
+</html>
